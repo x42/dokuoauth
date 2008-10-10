@@ -119,10 +119,31 @@ class TestOAuthDataStore extends OAuthDataStore {/*{{{*/
 /*  A very dbm-based oauth storage to come
  */
 class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
-  private $dbh;
+    private $dbh;
 
     function __construct($path = 'conf/oauth.gdbm') {/*{{{*/ /// XX DOKU_CONF 
-	$this->dbh = dba_popen($path, 'c', 'gdbm');
+        #print_r(dba_handlers());
+	$this->dbh = dba_popen($path, 'c', 'inifile');
+
+	#$rv = dba_fetch("consumer_robin", $this->dbh);
+	#print "hello robin\n";
+	#print_r($rv);
+	#print "----\n";
+
+        if ($this->lookup_consumer("robin")== NULL) {
+		// insert test consumer key & consumer secret
+		$key="robin";
+		$secret="geheim";
+    		$token = new OAuthConsumer($key, $secret);
+		if (!dba_insert("consumer_$key", serialize($token), $this->dbh)) {
+      			throw new OAuthException("doooom!");
+		}
+		#
+		# in INI-format:
+		#
+		# consumer_robin=O:13:"OAuthConsumer":3:{s:3:"key";s:5:"robin";s:6:"secret";s:6:"geheim";s:12:"callback_url";N;}
+		#
+	}
     }/*}}}*/
 
     function __destruct() {/*{{{*/

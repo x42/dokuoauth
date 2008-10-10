@@ -50,7 +50,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
                 /// temp. workaround 
                 /// until OAuth.php fixes URL-parameter arrays alike do['oauth']=token..
-                if ($_REQUEST['do']=="request_token") {
+                if ($_REQUEST['do']=="requesttoken") {
                     $token = $doku_server->fetch_request_token($req);
                     print $token;
                     exit(0);
