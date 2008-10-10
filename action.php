@@ -102,18 +102,32 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             require_once("dokuoauth.php");
             try {
                 switch (trim($event->data['oauth'])) {
-                    case 'token':
-                        $this->_debug('token');
-                        $handled=true;
-                        $req = OAuthRequest::from_request();
-                        $token = $doku_server->fetch_request_token($req);
-                        print $token;
-                        break;
-                    case 'access':
+                    case 'accesstoken':
                         $this->_debug('access');
                         $handled=true;
+                        # TODO - check if given request token has been authorized by user.. 
                         $req = OAuthRequest::from_request();
                         $token = $doku_server->fetch_access_token($req);
+                        # TODO: map user to access-token.
+                        print $token;
+                        break;
+                    case 'authorize':
+                        $this->_debug('authorize');
+                        $req = OAuthRequest::from_request();
+                        // auto-login special consumers.. (don't break;)
+                        // password-log-in and go to "confirm" (save $req);
+                        if (0)
+                          break;
+                    case 'requesttoken':
+                        # test only -> use "authorize"
+                        $this->_debug('token');
+                        $req = OAuthRequest::from_request();
+                        $handled=true;
+                    case 'confirm':
+                        if (!isset($req)) break; // XXX
+                        // TODO: mark request-token as user-authorized
+                        $token = $doku_server->fetch_request_token($req);
+                        // TODO redirect back to $consumer->callback_url add $request-token.
                         print $token;
                         break;
                     default:
