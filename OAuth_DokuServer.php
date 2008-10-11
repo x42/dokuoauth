@@ -20,21 +20,30 @@ class DokuOAuthServer extends OAuthServer {
   #   -> special consumers may 'auto-validate' to given user
   # - access-tokens are given/exchanged IFF the request-token is bound 
   #   -> delete prev mapping of request-token.
+  #   -> map access token to user.
   #
   # - timeout delete nonce
   # - allow to set time-limit to tokens..
 
-  public function map_dokuwiki_user($user, $consumer_key, $access_key=NULL) {
-  	if (empty($user)) return FALSE; 
-	# TODO - don't link user to consumer-key ... 
-	# link user to accees_key !
-    	$this->data_store->new_usermap($user, $consumer_key, $access_key);
+  public function map_consumer($consumer_key, $acllimit) {
+  	if (empty($consumer_key)) return FALSE; 
+    	$this->data_store->new_usermap($acllimit, 'userC', $consumer_key);
 	return TRUE;
+  }
+
+  public function map_user($user, $consumer_key, $token) {
+  	if (empty($user)) return FALSE; 
+  	if (empty($token)) return FALSE; 
+    	$this->data_store->new_usermap($user, 'userT', $consumer_key, $token);
+	return TRUE;
+  }
+
+  public function get_consumeracl($consumer_key) {
+    	return ($this->data_store->lookup_consumeracl($consumer_key));
   }
 
   public function get_dokuwiki_user($consumer, $token) {
     	return ($this->data_store->lookup_user($consumer->key, $token->key));
-	#return 'rgareus';
   }
 
 }
@@ -82,65 +91,6 @@ EOD;
 } 
 */
 
-/**
- * A data store for testing
- */
-class TestOAuthDataStore extends OAuthDataStore {/*{{{*/
-    private $consumer;
-    private $request_token;
-    private $access_token;
-    private $nonce;
-
-    function __construct() {/*{{{*/
-        $this->consumer = new OAuthConsumer("key", "secret", NULL);
-        $this->request_token = new OAuthToken("requestkey", "requestsecret", 1);
-        $this->access_token = new OAuthToken("accesskey", "accesssecret", 1);
-        $this->nonce = "nonce";
-    }/*}}}*/
-
-    function lookup_consumer($consumer_key) {/*{{{*/
-        if ($consumer_key == $this->consumer->key) return $this->consumer;
-        return NULL;
-    }/*}}}*/
-
-    function lookup_token($consumer, $token_type, $token) {/*{{{*/
-        $token_attrib = $token_type . "_token";
-        if ($consumer->key == $this->consumer->key
-            && $token == $this->$token_attrib->key) {
-            return $this->$token_attrib;
-        }
-        return NULL;
-    }/*}}}*/
-
-    function lookup_nonce($consumer, $token, $nonce, $timestamp) {/*{{{*/
-        if ($consumer->key == $this->consumer->key
-            && (($token && $token->key == $this->request_token->key)
-                || ($token && $token->key == $this->access_token->key))
-            && $nonce == $this->nonce) {
-            return $this->nonce;
-        }
-        return NULL;
-    }/*}}}*/
-
-    function new_request_token($consumer) {/*{{{*/
-        if ($consumer->key == $this->consumer->key) {
-            return $this->request_token;
-        }
-        return NULL;
-    }/*}}}*/
-
-    function new_access_token($token, $consumer) {/*{{{*/
-        if ($consumer->key == $this->consumer->key
-            && $token->key == $this->request_token->key) {
-            return $this->access_token;
-        }
-        return NULL;
-    }/*}}}*/
-}/*}}}*/
-
-
-
-
 /*  A very dbm-based oauth storage to come
  */
 class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
@@ -154,7 +104,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         if ($this->lookup_consumer("robin")== NULL) {
 		// insert test consumer key & consumer secret
 		$this->new_consumer("robin", "geheim");
-		$this->new_usermap("rgareus", "robin");
+		$this->new_usermap("root", 'userC', "robin");
 		# in INI-format:
 		#  consumer_robin=O:13:"OAuthConsumer":3:{s:3:"key";s:5:"robin";s:6:"secret";s:6:"geheim";s:12:"callback_url";N;}
 		#  userC_robin=a:3:{s:4:"user";s:7:"rgareus";s:5:"token";s:5:"robin";s:6:"access";N;}
@@ -165,31 +115,31 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
 	dba_close($this->dbh);
     }/*}}}*/
 
-    function new_usermap($user, $consumer_key, $access_key = NULL) {/*{{{*/
-	$data = array('user' => $user, 'consumer' => $consumer_key, 'access' => $access_key);
-	# TODO; allow assign/revoke tokens ..
-	if ($access_key!=NULL && 
-	         !dba_insert("userA_$access_key", serialize($data), $this->dbh))
-	    throw new OAuthException("doooom!");
-	else if (!dba_insert("userC_$consumer_key", serialize($data), $this->dbh))
+    function new_usermap($user, $type='userC', $consumer_key, $token = NULL) {/*{{{*/
+	$data = array('user' => $user, 'consumer' => $consumer_key, 'token' => $token);
+	if (empty($token)) $token=$consumer_key;
+	if (!dba_insert("${type}_$token", serialize($data), $this->dbh))
 	    throw new OAuthException("doooom!");
     }/*}}}*/
 
-    function lookup_user($consumer_key, $access_key = NULL) {/*{{{*/
-        if ($access_key!=NULL) 
-	    $rv = dba_fetch("userA_$access_key", $this->dbh);
-	if ($rv === FALSE) { # for testing - map consumer to user :-X
-	    $rv = dba_fetch("userC_$consumer_key", $this->dbh);
-	}
+    function del_usermap($type='userT', $token) {/*{{{*/
+	dba_delete("${type}_$token", $this->dbh);
+    }
+
+    function lookup_consumeracl($consumer_key) {/*{{{*/
+	$rv = dba_fetch("userC_$consumer_key", $this->dbh);
 	if ($rv === FALSE) return NULL;
-	print_r($data);
 	$data = unserialize($rv);
 	if ($data['consumer'] != $consumer_key) return NULL;
+	return $data['user'];
+    }
 
-	if (!empty($data['access'])  # TODO: require strict matching
-	    && !empty($access_key) 
-	    && $data['access'] != $access_key) return NULL;
-
+    function lookup_user($consumer_key, $token) {/*{{{*/
+	$rv = dba_fetch("userT_$token", $this->dbh);
+	if ($rv === FALSE) return NULL;
+	$data = unserialize($rv);
+	if ($data['consumer'] != $consumer_key) return NULL;
+	if ($data['token'] != $token) return NULL;
 	return $data['user'];
     }/*}}}*/
 
@@ -225,13 +175,28 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
 	return $obj;
     }/*}}}*/
 
+    function cleanup_nonce() {/*{{{*/
+	$key = dba_firstkey($this->dbh);
+	$now=time();
+	$handle_later = array();
+	while ($key != false) {
+	# and clean up old-ones  -> oauth_timestamp ;; OAuthServer->timestamp_threshold (300 sec)
+	    if (!strncmp($key,"nonce_",6) && dba_fetch($key, $this->dbh) + 300 < $now) 
+	    	$handle_later[] = $key;
+	    $key = dba_nextkey($this->dbh);
+	}
+	foreach ($handle_later as $key) {
+	  dba_delete($key, $this->dbh);
+	}
+    }
+
     function lookup_nonce($consumer, $token, $nonce, $timestamp) {/*{{{*/
 	if (dba_exists("nonce_$nonce", $this->dbh)) {
 	    return TRUE;
 	} else {
 	    # TODO: timestamp nonce 
-	    # and clean up old-ones  -> oauth_timestamp ;; OAuthServer->timestamp_threshold (300 sec)
-	    dba_insert("nonce_$nonce", "1", $this->dbh);
+	    dba_insert("nonce_$nonce", time(), $this->dbh);
+	    $this->cleanup_nonce();
 	    return FALSE;
 	}
     }/*}}}*/
@@ -257,9 +222,14 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
     }/*}}}*/
 
     function new_access_token($token, $consumer) {/*{{{*/
-	$token = $this->new_token($consumer, 'access');
+	$actok = $this->new_token($consumer, 'access');
 	dba_delete("request_" . $token->key, $this->dbh);
-	return $token;
+	#
+    	$user=($this->lookup_user($consumer->key, $token->key));
+  	if (empty($user)) return FALSE;  // XXX
+	$this->del_usermap('userT', $token->key);
+    	$this->new_usermap($user, 'userT', $consumer->key, $actok->key);
+	return $actok;
     }/*}}}*/
 }/*}}}*/
 

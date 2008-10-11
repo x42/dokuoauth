@@ -52,6 +52,10 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                 /// until OAuth.php fixes URL-parameter arrays alike do['oauth']=token..
                 if ($_REQUEST['do']=="requesttoken") {
                     $token = $doku_server->fetch_request_token($req);
+                    $user='rgareus';
+                    $aclimit = $doku_server->get_consumeracl($_REQUEST['oauth_consumer_key']);
+                    //TODO - check user /acl limit
+                    $doku_server->map_user($user,$_REQUEST['oauth_consumer_key'], $token->key);
                     print $token;
                     exit(0);
                 } else if ($_REQUEST['do']=="accesstoken") {
@@ -125,8 +129,15 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $handled=true;
                     case 'confirm':
                         if (!isset($req)) break; // XXX
-                        // TODO: mark request-token as user-authorized
                         $token = $doku_server->fetch_request_token($req);
+                        // TODO get authorized/logged-on username.
+                        $user='rgareus';
+                        $consumer_key=$_REQUEST['oauth_consumer_key']; // TODO: create Consumer Class?
+                        $aclimit = $doku_server->get_consumeracl($consumer_key); 
+                        // TODO: check if user is elidgeble for for this consumer
+                        
+                        // mark request-token as user-authorized
+                        $doku_server->map_user($user,$consumer_key, $token->key);
                         // TODO redirect back to $consumer->callback_url add $request-token.
                         print $token;
                         break;
