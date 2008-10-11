@@ -2,7 +2,7 @@
 require_once("OAuth.php");
 require_once("OAuth_DokuServer.php");
 
-$doku_server = new DokuOAuthServer(new DokuOAuthDataStore(DOKU_CONF.'oauth.gdbm'));
+$doku_server = new DokuOAuthServer(new DokuOAuthDataStore(DOKU_CONF.'oauth.inidb'));
 #$doku_server = new DokuOAuthServer(new TestOAuthDataStore());
 
 $doku_server->add_signature_method(new OAuthSignatureMethod_HMAC_SHA1());

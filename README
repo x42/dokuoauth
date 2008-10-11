@@ -1,0 +1,24 @@
+see http://mir.dnsalias.com/wiki/dokuoauth
+
+oAuth tokens and keys are stored in DOKU_CONF.'oauth.inidb' in .ini db file format.
+this is work in progres..
+
+The dokuoauth plugin requires a small patch to dokuwiki intoducing a 
+new Event-Hook: ACTION_ON_AUTH
+
+--- a/inc/auth.php
++++ b/inc/auth.php
+@@ -72,7 +72,13 @@
+         // external trust mechanism in place
+         $auth->trustExternal($_REQUEST['u'],$_REQUEST['p'],$_REQUEST['r']);
+       }else{
+-        auth_login($_REQUEST['u'],$_REQUEST['p'],$_REQUEST['r']);
++        $evt = new Doku_Event('ACTION_ON_AUTH',$ACT);
++        $evt->advise_before();
++        if(empty($_SERVER['REMOTE_USER'])) {
++            auth_login($_REQUEST['u'],$_REQUEST['p'],$_REQUEST['r']);
++        }
++        $evt->advise_after();
++        unset($evt);
+       }
+     }
