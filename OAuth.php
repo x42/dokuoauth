@@ -265,6 +265,15 @@ class OAuthRequest {/*{{{*/
     if (isset($params['oauth_signature'])) {
       unset($params['oauth_signature']);
     }
+
+    foreach($params as $k => $v) {
+      if (is_array($v)) {
+        unset($params[$k]);
+	foreach($v as $ak => $av) {
+	  $params[$k.'['.$ak.']']=$av;
+	}
+      }
+    }
 		
     // Urlencode both keys and values
     $keys = array_map(array('OAuthUtil', 'urlencodeRFC3986'), array_keys($params));
