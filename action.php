@@ -125,31 +125,45 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                     case 'authorize':
                         $this->_debug('authorize');
                         $req = OAuthRequest::from_request();
-                        // auto-login special consumers.. (don't break;)
-                        // password-log-in and go to "confirm" (save $req);
-                        if (0)
+                        $op=$req->get_parameters();
+                        $consumer_key=$op['oauth_consumer_key'];
+
+                        $user = $this->check_consumer_acl($doku_server, $consumer_key);
+
+                        #create here and save during log-in, whitelist-check, confirm.. ?!
+                        #$token = $doku_server->fetch_request_token($req);
+
+                        if (empty($user)) {
+                          # TODO password-log-in and return here (save $req) 
+                          nice_die("you'll need to log in.");
                           break;
+                        }
                     case 'requesttoken': # test only !! -> use "authorize"
                         $this->_debug('token');
                         $req = OAuthRequest::from_request();
+                        if (empty($user)) $user='rgareus'; // XXX test
                         $handled=true;
                     case 'confirm':
-                        if (!isset($req)) break; // XXX
-                        $token = $doku_server->fetch_request_token($req);
-                        // TODO get authorized/logged-on username.
-                        $user='rgareus';
+                        if (!isset($req)) break; // XXX - we get here from 'authorize' , $user and $req are set
                         $op=$req->get_parameters();
                         $consumer_key=$op['oauth_consumer_key'];
-                        $consumer = $doku_server->get_consumer_by_key($consumer_key);
-                        $aclimit = $doku_server->get_consumer_acl($consumer_key); 
-                        // TODO: check if user is elidgeble for for this consumer
-                        
-                        // mark request-token as user-authorized
+
+                        $token = $doku_server->fetch_request_token($req); /// XXX get from above ?!
+
+                        if (empty($user) || !$this->check_consumer_confirm($doku_server, $user, $consumer_key, $token)) {
+                          # TODO ask for confirmation and return here (save $req);
+                          nice_die("you'll need to confirm this consumer request.");
+                          break;
+                        }
                         $doku_server->map_user($user,$consumer_key, $token->key);
 
                         // redirect back to $consumer->callback_url add $request-token.
+                        $consumer = $doku_server->get_consumer_by_key($consumer_key);
                         if (!empty($consumer->callback_url)) {
-                            $this->redirect($consumer->callback_url, array('oauth_token'=>rawurlencode($token->key), 'oauth_token_secret'=>rawurlencode($token->secret)));
+                            $this->redirect($consumer->callback_url, array(
+                                    'oauth_token'=>rawurlencode($token->key),
+                                    'oauth_token_secret'=>rawurlencode($token->secret)
+                                    ));
                         } else  {
                             print $token;
                         }
@@ -169,6 +183,31 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             $event->stopPropagation();
             $event->preventDefault();
         }
+    }
+    private function check_consumer_acl($doku_server, $consumer_key) {/*{{{*/
+        $aclimit = $doku_server->get_consumer_acl($consumer_key);
+        $user=NULL;
+        if (is_array($acllimit) && !empty($aclimit['suid'])) {
+           $user = $aclimit['suid'];
+           return $user;
+        } 
+        if ($_SERVER['REMOTE_USER']) {
+            $user=$_SERVER['REMOTE_USER'];
+        } else if (auth_login("","",false,true)) {
+        # auth_login($_REQUEST['u'],$_REQUEST['p'],$_REQUEST['r'],false,true); # workaround for workaround above ;)
+            global $USERINFO;
+            $user=$_SERVER['REMOTE_USER'];
+        }
+        return $user;
+    }/*}}}*/
+
+    private function check_consumer_confirm($doku_server, $user, $consumer_key, $request_token) {/*{{{*/
+        $aclimit = $doku_server->get_consumer_acl($consumer_key);
+        if (is_array($acllimit) && !empty($aclimit['suid'])) return true;
+
+        // TODO: check database ... for user <> consumer  user-whitelist (auto-confirm)
+        // TODO: check database ... for user <> consumer  user-confirmed
+        return true; /// XXX
     }
 
     private function redirect($uri, $params) {/*{{{*/
