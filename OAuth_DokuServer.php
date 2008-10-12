@@ -10,6 +10,7 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
 
     public function map_consumer($consumer_key, $acllimit) {/*{{{*/
         if (empty($consumer_key)) return FALSE; 
+        if (is_array($acllimit)) return FALSE; 
         $this->data_store->new_usermap($acllimit, 'userC', $consumer_key);
         return TRUE;
     }/*}}}*/
@@ -47,7 +48,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
             // insert test consumer key & consumer secret
             #$this->new_consumer("robin", "geheim");
             $this->new_consumer("robin", "geheim", "http://localhost/callbackdump.php");
-            $this->new_usermap("root", 'userC', "robin");
+            $this->new_usermap(array('suid' => 'rgareus'), 'userC', "robin");
             # in INI-format:
             #  consumer_robin=O:13:"OAuthConsumer":3:{s:3:"key";s:5:"robin";s:6:"secret";s:6:"geheim";s:12:"callback_url";N;}
             #  userC_robin=a:3:{s:4:"user";s:7:"rgareus";s:5:"token";s:5:"robin";s:6:"access";N;}

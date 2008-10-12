@@ -163,6 +163,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $this->redirect($consumer->callback_url, array(
                                     'oauth_token'=>rawurlencode($token->key),
                                     'oauth_token_secret'=>rawurlencode($token->secret)
+                                    # TODO: include xoauth parameters
                                     ));
                         } else  {
                             print $token;
@@ -198,6 +199,10 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             global $USERINFO;
             $user=$_SERVER['REMOTE_USER'];
         }
+        // TODO : check acllimit array..
+        // check group, not is_admin, etc.
+        #if (!in_array($user, $aclimit['users'])) $user=NULL;
+
         return $user;
     }/*}}}*/
 
@@ -207,6 +212,9 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
         // TODO: check database ... for user <> consumer  user-whitelist (auto-confirm)
         // TODO: check database ... for user <> consumer  user-confirmed
+        # can eventually use 
+        #   $doku_server->map_user($user,$consumer_key, $token->key);
+        # and get_dokuwiki_user(..) with dokuwiki-POST..
         return true; /// XXX
     }
 
