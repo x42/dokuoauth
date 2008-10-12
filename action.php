@@ -41,6 +41,18 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
     function handle_act_authhook(&$event, $param){
         if (is_array($_REQUEST['do']) && !empty($_REQUEST['do']['oauth'])) return; // skip requests to oauth-API
+        /// temp. workaround 
+        /// until OAuth.php fixes request-parameter arrays alike do['oauth']=token..
+        if (in_array($_REQUEST['do'], array("requesttoken", "accesstoken"))){
+            $data=array('oauth' => $_REQUEST['do']);
+            $this->_debug("workaround do[oauth]: ".print_r($event,true));
+            $ev=new Doku_Event("OAUTH_ACT_PREPROCESS", $data);
+            $this->handle_act_preprocess($ev, NULL);
+            unset($ev);
+            exit(0);
+        }
+        /// end workaround
+
         if (!empty($_REQUEST['oauth_signature'])) {
             require_once("dokuoauth.php");
             $user='';
@@ -48,28 +60,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             try {
                 $req = OAuthRequest::from_request();
 
-                /// temp. workaround 
-                /// until OAuth.php fixes URL-parameter arrays alike do['oauth']=token..
-                if ($_REQUEST['do']=="requesttoken") {
-                    $token = $doku_server->fetch_request_token($req);
-                    $user='rgareus';
-                    $aclimit = $doku_server->get_consumeracl($_REQUEST['oauth_consumer_key']);
-                    //TODO - check user /acl limit
-                    $doku_server->map_user($user,$_REQUEST['oauth_consumer_key'], $token->key);
-                    print $token;
-                    exit(0);
-                } else if ($_REQUEST['do']=="accesstoken") {
-                    $token = $doku_server->fetch_access_token($req);
-                    print $token;
-                    exit(0);
-                } else
-                /// end workaround
-
                 list($consumer, $token) = $doku_server->verify_request($req);
-
-                #print_r($consumer);  # $consumer['key'] -> consumer-key $consumer['secret'] -> consumer-secret
-                #print_r($token); # Access-key&secret A
-
                 $user=$doku_server->get_dokuwiki_user($consumer, $token);
 
             } catch (OAuthException $e) {
@@ -100,6 +91,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
      */
     function handle_act_preprocess(&$event, $param){
         $handled=false;
+        print_r($event->data);
         if (!empty($event->data['oauth'])) {
             #echo "hello robin,<br/>\n";
             // interactive oAuth - admin

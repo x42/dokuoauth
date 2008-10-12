@@ -1,52 +1,36 @@
-<?php //vim: foldmethod=marker
+<?php 
+//vim: foldmethod=marker
 
-class DokuOAuthServer extends OAuthServer {
-/*
-  public function get_dokuwiki_user_from_request($request) {
-      // TODO: check parameter -> should be arrays..
-      $this->get_dokuwiki_user($request['oauth_consumer_key'], $request['oauth_token']);
-  } 
-*/
+class DokuOAuthServer extends OAuthServer {/*{{{*/
 
-  public function create_consumer($consumer_key=NULL, $consumer_secret=NULL, $callback_url=NULL) {
-  	if (empty($consumer_key)) $consumer_key = $this->data_store->create_hash($user);
-  	if (empty($consumer_secret)) $consumer_secret = $this->data_store->create_hash(sha1($user));
-    	return $this->data_store->new_consumer($consumer_key, $consumer_secret, $callback_url);
-  }
+    public function create_consumer($consumer_key=NULL, $consumer_secret=NULL, $callback_url=NULL) {/*{{{*/
+        if (empty($consumer_key)) $consumer_key = $this->data_store->create_hash($user);
+        if (empty($consumer_secret)) $consumer_secret = $this->data_store->create_hash(sha1($user));
+        return $this->data_store->new_consumer($consumer_key, $consumer_secret, $callback_url);
+    }/*}}}*/
 
-  # TODO:
-  # - consumer may be limited to certain user or group
-  # - request-tokens are generated and bound to logged on user (if available for this consumer-key)
-  #   -> special consumers may 'auto-validate' to given user
-  # - access-tokens are given/exchanged IFF the request-token is bound 
-  #   -> delete prev mapping of request-token.
-  #   -> map access token to user.
-  #
-  # - timeout delete nonce
-  # - allow to set time-limit to tokens..
+    public function map_consumer($consumer_key, $acllimit) {/*{{{*/
+        if (empty($consumer_key)) return FALSE; 
+        $this->data_store->new_usermap($acllimit, 'userC', $consumer_key);
+        return TRUE;
+    }/*}}}*/
 
-  public function map_consumer($consumer_key, $acllimit) {
-  	if (empty($consumer_key)) return FALSE; 
-    	$this->data_store->new_usermap($acllimit, 'userC', $consumer_key);
-	return TRUE;
-  }
+    public function map_user($user, $consumer_key, $token) {/*{{{*/
+        if (empty($user)) return FALSE; 
+        if (empty($token)) return FALSE; 
+        $this->data_store->new_usermap($user, 'userT', $consumer_key, $token);
+        return TRUE;
+    }/*}}}*/
 
-  public function map_user($user, $consumer_key, $token) {
-  	if (empty($user)) return FALSE; 
-  	if (empty($token)) return FALSE; 
-    	$this->data_store->new_usermap($user, 'userT', $consumer_key, $token);
-	return TRUE;
-  }
+    public function get_consumeracl($consumer_key) {/*{{{*/
+        return ($this->data_store->lookup_consumeracl($consumer_key));
+    }/*}}}*/
 
-  public function get_consumeracl($consumer_key) {
-    	return ($this->data_store->lookup_consumeracl($consumer_key));
-  }
+    public function get_dokuwiki_user($consumer, $token) {/*{{{*/
+        return ($this->data_store->lookup_user($consumer->key, $token->key));
+    }/*}}}*/
 
-  public function get_dokuwiki_user($consumer, $token) {
-    	return ($this->data_store->lookup_user($consumer->key, $token->key));
-  }
-
-}
+}/*}}}*/
 
 /*
 class DokuOAuthSignatureMethod_RSA_SHA1 extends OAuthSignatureMethod_RSA_SHA1 {
@@ -98,139 +82,140 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
     private $SALT='rg';
 
     function __construct($path = 'conf/oauth.gdbm') {/*{{{*/ /// XX DOKU_CONF 
-        #print_r(dba_handlers());
-	$this->dbh = dba_popen($path, 'c', 'inifile');
-
+        $this->dbh = dba_popen($path, 'c', 'inifile');
+#TEST CODE
         if ($this->lookup_consumer("robin")== NULL) {
-		// insert test consumer key & consumer secret
-		$this->new_consumer("robin", "geheim");
-		$this->new_usermap("root", 'userC', "robin");
-		# in INI-format:
-		#  consumer_robin=O:13:"OAuthConsumer":3:{s:3:"key";s:5:"robin";s:6:"secret";s:6:"geheim";s:12:"callback_url";N;}
-		#  userC_robin=a:3:{s:4:"user";s:7:"rgareus";s:5:"token";s:5:"robin";s:6:"access";N;}
-	}
+            // insert test consumer key & consumer secret
+            $this->new_consumer("robin", "geheim");
+            $this->new_usermap("root", 'userC', "robin");
+            # in INI-format:
+            #  consumer_robin=O:13:"OAuthConsumer":3:{s:3:"key";s:5:"robin";s:6:"secret";s:6:"geheim";s:12:"callback_url";N;}
+            #  userC_robin=a:3:{s:4:"user";s:7:"rgareus";s:5:"token";s:5:"robin";s:6:"access";N;}
+        }
+#END TEST CODE
     }/*}}}*/
 
     function __destruct() {/*{{{*/
-	dba_close($this->dbh);
+        dba_close($this->dbh);
     }/*}}}*/
 
     function new_usermap($user, $type='userC', $consumer_key, $token = NULL) {/*{{{*/
-	$data = array('user' => $user, 'consumer' => $consumer_key, 'token' => $token);
-	if (empty($token)) $token=$consumer_key;
-	if (!dba_insert("${type}_$token", serialize($data), $this->dbh))
-	    throw new OAuthException("doooom!");
+        $data = array('user' => $user, 'consumer' => $consumer_key, 'token' => $token);
+        if (empty($token)) $token=$consumer_key;
+        if (!dba_insert("${type}_$token", serialize($data), $this->dbh))
+            throw new OAuthException("doooom!");
+        }/*}}}*/
+
+        function del_usermap($type='userT', $token) {/*{{{*/
+        dba_delete("${type}_$token", $this->dbh);
     }/*}}}*/
 
-    function del_usermap($type='userT', $token) {/*{{{*/
-	dba_delete("${type}_$token", $this->dbh);
-    }
-
     function lookup_consumeracl($consumer_key) {/*{{{*/
-	$rv = dba_fetch("userC_$consumer_key", $this->dbh);
-	if ($rv === FALSE) return NULL;
-	$data = unserialize($rv);
-	if ($data['consumer'] != $consumer_key) return NULL;
-	return $data['user'];
-    }
+        $rv = dba_fetch("userC_$consumer_key", $this->dbh);
+        if ($rv === FALSE) return NULL;
+        $data = unserialize($rv);
+        if ($data['consumer'] != $consumer_key) return NULL;
+        return $data['user'];
+    }/*}}}*/
 
     function lookup_user($consumer_key, $token) {/*{{{*/
-	$rv = dba_fetch("userT_$token", $this->dbh);
-	if ($rv === FALSE) return NULL;
-	$data = unserialize($rv);
-	if ($data['consumer'] != $consumer_key) return NULL;
-	if ($data['token'] != $token) return NULL;
-	return $data['user'];
+        $rv = dba_fetch("userT_$token", $this->dbh);
+        if ($rv === FALSE) return NULL;
+        $data = unserialize($rv);
+        if ($data['consumer'] != $consumer_key) return NULL;
+        if ($data['token'] != $token) return NULL;
+        return $data['user'];
     }/*}}}*/
 
     function new_consumer($consumer_key, $consumer_secret, $callback_url=NULL) {/*{{{*/
-	$consumer = new OAuthConsumer($consumer_key, $consumer_secret, $callback_url);
-	if (!dba_insert("consumer_$consumer_key", serialize($consumer), $this->dbh)) {
-	    throw new OAuthException("doooom!");
-	}
-	return $consumer;
+        $consumer = new OAuthConsumer($consumer_key, $consumer_secret, $callback_url);
+        if (!dba_insert("consumer_$consumer_key", serialize($consumer), $this->dbh)) {
+            throw new OAuthException("doooom!");
+        }
+        return $consumer;
     }/*}}}*/
 
     function lookup_consumer($consumer_key) {/*{{{*/
-	$rv = dba_fetch("consumer_$consumer_key", $this->dbh);
-	if ($rv === FALSE) {
-	    return NULL;
-	}
-	$obj = unserialize($rv);
-	if (!($obj instanceof OAuthConsumer)) {
-	    return NULL;
-	}
-	return $obj;
+        $rv = dba_fetch("consumer_$consumer_key", $this->dbh);
+        if ($rv === FALSE) {
+            return NULL;
+        }
+        $obj = unserialize($rv);
+        if (!($obj instanceof OAuthConsumer)) {
+            return NULL;
+        }
+        return $obj;
     }/*}}}*/
 
     function lookup_token($consumer, $token_type, $token) {/*{{{*/
-	$rv = dba_fetch("${token_type}_${token}", $this->dbh);
-	if ($rv === FALSE) {
-	    return NULL;
-	}
-	$obj = unserialize($rv);
-	if (!($obj instanceof OAuthToken)) {
-	    return NULL;
-	}
-	return $obj;
+        $rv = dba_fetch("${token_type}_${token}", $this->dbh);
+        if ($rv === FALSE) {
+            return NULL;
+        }
+        $obj = unserialize($rv);
+        if (!($obj instanceof OAuthToken)) {
+            return NULL;
+        }
+        return $obj;
     }/*}}}*/
 
     function cleanup_nonce() {/*{{{*/
-	$key = dba_firstkey($this->dbh);
-	$now=time();
-	$handle_later = array();
-	while ($key != false) {
-	# and clean up old-ones  -> oauth_timestamp ;; OAuthServer->timestamp_threshold (300 sec)
-	    if (!strncmp($key,"nonce_",6) && dba_fetch($key, $this->dbh) + 300 < $now) 
-	    	$handle_later[] = $key;
-	    $key = dba_nextkey($this->dbh);
-	}
-	foreach ($handle_later as $key) {
-	  dba_delete($key, $this->dbh);
-	}
-    }
+        $key = dba_firstkey($this->dbh);
+        $now=time();
+        $handle_later = array();
+        while ($key != false) {
+        # and clean up old-ones  -> oauth_timestamp ;; OAuthServer->timestamp_threshold (300 sec)
+            if (!strncmp($key,"nonce_",6) && dba_fetch($key, $this->dbh) + 300 < $now) 
+                $handle_later[] = $key;
+            $key = dba_nextkey($this->dbh);
+        }
+        foreach ($handle_later as $key) {
+            dba_delete($key, $this->dbh);
+        }
+    }/*}}}*/
 
     function lookup_nonce($consumer, $token, $nonce, $timestamp) {/*{{{*/
-	if (dba_exists("nonce_$nonce", $this->dbh)) {
-	    return TRUE;
-	} else {
-	    # TODO: timestamp nonce 
-	    dba_insert("nonce_$nonce", time(), $this->dbh);
-	    $this->cleanup_nonce();
-	    return FALSE;
-	}
+        if (dba_exists("nonce_$nonce", $this->dbh)) {
+            return TRUE;
+        } else {
+            # TODO: timestamp nonce 
+            dba_insert("nonce_$nonce", time(), $this->dbh);
+            $this->cleanup_nonce();
+            return FALSE;
+        }
     }/*}}}*/
 
     function create_hash($pepper=NULL) {/*{{{*/
         if (empty($pepper)) $pepper=time();
-	$rv = md5(time().$this->SALT.md5($pepper));
-	return $rv;
+        $rv = md5(time().$this->SALT.md5($pepper));
+        return $rv;
     }/*}}}*/
 
     function new_token($consumer, $type="request") {/*{{{*/
-	$key = $this->create_hash($consumer->key);
-	$secret = time() + time();
-	$token = new OAuthToken($key, md5(md5($secret)));
-	if (!dba_insert("${type}_$key", serialize($token), $this->dbh)) {
-	    throw new OAuthException("doooom!");
-	}
-	return $token;
+        $key = $this->create_hash($consumer->key);
+        $secret = time() + time();
+        $token = new OAuthToken($key, md5(md5($secret)));
+        if (!dba_insert("${type}_$key", serialize($token), $this->dbh)) {
+            throw new OAuthException("doooom!");
+        }
+    return $token;
     }/*}}}*/
 
     function new_request_token($consumer) {/*{{{*/
-	return $this->new_token($consumer, "request");
+        return $this->new_token($consumer, "request");
     }/*}}}*/
 
     function new_access_token($token, $consumer) {/*{{{*/
-	$actok = $this->new_token($consumer, 'access');
-	dba_delete("request_" . $token->key, $this->dbh);
-	#
-    	$user=($this->lookup_user($consumer->key, $token->key));
-  	if (empty($user)) return FALSE;  // XXX
-	$this->del_usermap('userT', $token->key);
-    	$this->new_usermap($user, 'userT', $consumer->key, $actok->key);
-	return $actok;
+        $actok = $this->new_token($consumer, 'access');
+        dba_delete("request_" . $token->key, $this->dbh);
+    #
+        $user=($this->lookup_user($consumer->key, $token->key));
+        if (empty($user)) return FALSE;  // XXX
+        $this->del_usermap('userT', $token->key);
+            $this->new_usermap($user, 'userT', $consumer->key, $actok->key);
+        return $actok;
     }/*}}}*/
+
 }/*}}}*/
 
 //Setup VIM: ex: et sw=4 ts=4 enc=utf-8 :
