@@ -45,18 +45,6 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
     function handle_act_authhook(&$event, $param){
         if (is_array($_REQUEST['do']) && !empty($_REQUEST['do']['oauth'])) return; // skip requests to oauth-API
 
-        /// temp. workaround 
-        /// until OAuth.php fixes request-parameter arrays alike do['oauth']=token..
-        if (in_array($_REQUEST['do'], array("requesttoken", "accesstoken"))){
-            $data=array('oauth' => $_REQUEST['do']);
-            #$this->_debug("workaround do[oauth]: ".print_r($event,true));
-            $ev=new Doku_Event("OAUTH_ACT_PREPROCESS", $data);
-            $this->handle_act_preprocess($ev, NULL);
-            unset($ev);
-            exit(0);
-        }
-        /// end workaround
-
         if (!empty($_REQUEST['oauth_signature'])) {
             require_once("dokuoauth.php");
             $user='';
@@ -92,13 +80,17 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
 # FLOW;
 # - [admin,user,auto] add consumer 
+#     [admin] may set suid tokens along with user
+#     [admin] may set trust-level of consumer-keys (restrict to users, group)
+#     [user] may whitelist consumer for his account and set an ACL limit for the consumer and/or [req|access] token!
+#     [anon-consumers] may add themselves with a callback uri 
 # - get request-token
 #    [auto] if consumer is suid (no-browser - return token or redirect to consumer)
 #    [auto] if user is logged-on and has whitelisted the consumer -> redirect to consumer
 #    [user] if user is logged-on -> as for confirmation  -> redirect to consumer
 #    [user] log-in (remember consumer) -> try-again to check/ask for confirmation -> redirect to consumer
 #
-# - [auto] get access-token (done)
+# - [auto] get access-token 
 #    check if request token is valid for this consumer and has a dokuwiki user mapped to it..  
 #
     /**
@@ -111,6 +103,9 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             require_once("dokuoauth.php");
             try {
                 switch (trim($event->data['oauth'])) {
+                    case 'addconsumer':
+                        // TODO
+                        break;
                     case 'accesstoken':
                         $this->_debug('access');
                         $handled=true;
@@ -123,6 +118,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         print $token;
                         break;
                     case 'authorize':
+                    case 'requesttoken': # test only !! 
                         $this->_debug('authorize');
                         $req = OAuthRequest::from_request();
                         $op=$req->get_parameters();
@@ -130,15 +126,19 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
                         $user = $this->check_consumer_acl($doku_server, $consumer_key);
 
-                        #create here and save during log-in, whitelist-check, confirm.. ?!
+                        #create req.token here and save during log-in, whitelist-check, confirm.. ?!
                         #$token = $doku_server->fetch_request_token($req);
 
                         if (empty($user)) {
                           # TODO password-log-in and return here (save $req) 
-                          nice_die("you'll need to log in.");
-                          break;
+                            if (!($helper = &plugin_load('helper', 'oauth'))){
+                                trigger_error('xmpp Publish Plugin is not available.');
+                                break;
+                            }
+                            $helper->oauthLogon(1,2,3);
+                            break;
                         }
-                    case 'requesttoken': # test only !! -> use "authorize"
+                    #case 'requesttoken': # test only !! -> use "authorize"
                         $this->_debug('token');
                         $req = OAuthRequest::from_request();
                         if (empty($user)) $user='rgareus'; // XXX test
@@ -181,34 +181,37 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         }
 
         if ($handled) {
+            exit(0); // prevent further output..
             $event->stopPropagation();
             $event->preventDefault();
         }
     }
     private function check_consumer_acl($doku_server, $consumer_key) {/*{{{*/
-        $aclimit = $doku_server->get_consumer_acl($consumer_key);
+        $acllimit = $doku_server->get_consumer_acl($consumer_key);
         $user=NULL;
-        if (is_array($acllimit) && !empty($aclimit['suid'])) {
-           $user = $aclimit['suid'];
+        if (is_array($acllimit) && !empty($acllimit['suid'])) {
+           $user = $acllimit['suid'];
            return $user;
         } 
         if ($_SERVER['REMOTE_USER']) {
             $user=$_SERVER['REMOTE_USER'];
+            $this->_debug("dokuwiki already authenticated used.");
         } else if (auth_login("","",false,true)) {
+            $this->_debug("logged in used by COOKIE..");
         # auth_login($_REQUEST['u'],$_REQUEST['p'],$_REQUEST['r'],false,true); # workaround for workaround above ;)
             global $USERINFO;
             $user=$_SERVER['REMOTE_USER'];
         }
         // TODO : check acllimit array..
         // check group, not is_admin, etc.
-        #if (!in_array($user, $aclimit['users'])) $user=NULL;
+        #if (!in_array($user, $acllimit['users'])) $user=NULL;
 
         return $user;
     }/*}}}*/
 
     private function check_consumer_confirm($doku_server, $user, $consumer_key, $request_token) {/*{{{*/
-        $aclimit = $doku_server->get_consumer_acl($consumer_key);
-        if (is_array($acllimit) && !empty($aclimit['suid'])) return true;
+        $acllimit = $doku_server->get_consumer_acl($consumer_key);
+        if (is_array($acllimit) && !empty($acllimit['suid'])) return true;
 
         // TODO: check database ... for user <> consumer  user-whitelist (auto-confirm)
         // TODO: check database ... for user <> consumer  user-confirmed

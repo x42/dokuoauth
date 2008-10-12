@@ -10,13 +10,14 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
 
     public function map_consumer($consumer_key, $acllimit) {/*{{{*/
         if (empty($consumer_key)) return FALSE; 
-        if (is_array($acllimit)) return FALSE; 
+        if (!is_array($acllimit)) return FALSE; 
         $this->data_store->new_usermap($acllimit, 'userC', $consumer_key);
         return TRUE;
     }/*}}}*/
 
     public function map_user($user, $consumer_key, $token) {/*{{{*/
-        if (empty($user)) return FALSE; 
+        if (empty($user) || is_array($user)) return FALSE; 
+        if (empty($consumer_key)) return FALSE; 
         if (empty($token)) return FALSE; 
         $this->data_store->new_usermap($user, 'userT', $consumer_key, $token);
         return TRUE;
@@ -31,7 +32,8 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
     }/*}}}*/
 
     public function get_dokuwiki_user($consumer, $token) {/*{{{*/
-        return ($this->data_store->lookup_user($consumer->key, $token->key));
+        $user=$this->data_store->lookup_user($consumer->key, $token->key);
+        return ($user);
     }/*}}}*/
 
 }/*}}}*/
@@ -48,7 +50,8 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
             // insert test consumer key & consumer secret
             #$this->new_consumer("robin", "geheim");
             $this->new_consumer("robin", "geheim", "http://localhost/callbackdump.php");
-            $this->new_usermap(array('suid' => 'rgareus'), 'userC', "robin");
+            // map_consumer:
+            $this->new_usermap(array('suid' => 'rgareus', 'users'=>NULL, 'timeout' => 0), 'userC', "robin");
             # in INI-format:
             #  consumer_robin=O:13:"OAuthConsumer":3:{s:3:"key";s:5:"robin";s:6:"secret";s:6:"geheim";s:12:"callback_url";N;}
             #  userC_robin=a:3:{s:4:"user";s:7:"rgareus";s:5:"token";s:5:"robin";s:6:"access";N;}
@@ -60,8 +63,8 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         dba_close($this->dbh);
     }/*}}}*/
 
-    function new_usermap($user, $type='userC', $consumer_key, $token = NULL) {/*{{{*/
-        $data = array('user' => $user, 'consumer' => $consumer_key, 'token' => $token, 'created' => time());
+    function new_usermap($userdata, $type='userC', $consumer_key, $token = NULL) {/*{{{*/
+        $data = array('user' => $userdata, 'consumer' => $consumer_key, 'token' => $token, 'created' => time());
         if (empty($token)) $token=$consumer_key;
         if (!dba_insert("${type}_$token", serialize($data), $this->dbh))
             throw new OAuthException("doooom!");
@@ -171,7 +174,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         dba_delete("request_" . $token->key, $this->dbh);
     #
         $user=($this->lookup_user($consumer->key, $token->key));
-        if (empty($user)) { 
+        if (empty($user) || is_array($user)) { 
           dba_delete("access_" . $actok->key, $this->dbh);
           return FALSE;
         }
