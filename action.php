@@ -114,7 +114,6 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                     case 'accesstoken':
                         $this->_debug('access');
                         $handled=true;
-                        # TODO - check if given request token has been authorized by user.. 
                         $req = OAuthRequest::from_request();
                         $token = $doku_server->fetch_access_token($req);
                         # DokuOAuthDataStore: 
@@ -130,8 +129,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         // password-log-in and go to "confirm" (save $req);
                         if (0)
                           break;
-                    case 'requesttoken':
-                        # test only -> use "authorize"
+                    case 'requesttoken': # test only !! -> use "authorize"
                         $this->_debug('token');
                         $req = OAuthRequest::from_request();
                         $handled=true;
@@ -141,14 +139,20 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         // TODO get authorized/logged-on username.
                         $user='rgareus';
                         $op=$req->get_parameters();
-                        $consumer_key=$op['oauth_consumer_key']; // TODO: create Consumer Class?!
-                        $aclimit = $doku_server->get_consumeracl($consumer_key); 
+                        $consumer_key=$op['oauth_consumer_key'];
+                        $consumer = $doku_server->get_consumer_by_key($consumer_key);
+                        $aclimit = $doku_server->get_consumer_acl($consumer_key); 
                         // TODO: check if user is elidgeble for for this consumer
                         
                         // mark request-token as user-authorized
                         $doku_server->map_user($user,$consumer_key, $token->key);
-                        // TODO redirect back to $consumer->callback_url add $request-token.
-                        print $token;
+
+                        // redirect back to $consumer->callback_url add $request-token.
+                        if (!empty($consumer->callback_url)) {
+                            $this->redirect($consumer->callback_url, array('oauth_token'=>rawurlencode($token->key), 'oauth_token_secret'=>rawurlencode($token->secret)));
+                        } else  {
+                            print $token;
+                        }
                         break;
                     default:
                         break;
@@ -166,6 +170,32 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             $event->preventDefault();
         }
     }
+
+    private function redirect($uri, $params) {/*{{{*/
+        if (!empty($params)) { 
+            $q = array();
+            foreach ($params as $name=>$value)
+                $q[] = $name.'='.$value;
+            
+            $q_s = implode('&', $q);
+            if (strpos($uri, '?'))
+                $uri .= '&'.$q_s;
+            else
+                $uri .= '?'.$q_s;
+        }
+        // simple security - multiline location headers can inject all kinds of extras
+        $uri = preg_replace('/\s/', '%20', $uri);
+        if (strncasecmp($uri, 'http://', 7) && strncasecmp($uri, 'https://', 8)) {       
+            if (strpos($uri, '://'))
+                throw new OAuthException('Illegal protocol in redirect uri '.$uri);
+            $uri = 'http://'.$uri;
+        }
+            
+        header('HTTP/1.1 302 Found');
+        header('Location: '.$uri);
+        echo '';
+        exit(0);
+    } /*}}}*/
 
     /*{{{*/
     private function _debug ($m = null){

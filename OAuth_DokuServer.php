@@ -21,8 +21,12 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         return TRUE;
     }/*}}}*/
 
-    public function get_consumeracl($consumer_key) {/*{{{*/
+    public function get_consumer_acl($consumer_key) {/*{{{*/
         return ($this->data_store->lookup_consumeracl($consumer_key));
+    }/*}}}*/
+
+    public function get_consumer_by_key($consumer_key) {/*{{{*/
+        return ($this->data_store->lookup_consumer($consumer_key));
     }/*}}}*/
 
     public function get_dokuwiki_user($consumer, $token) {/*{{{*/
@@ -41,7 +45,8 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
 # !!! TEST SETUP CODE
         if ($this->lookup_consumer("robin")== NULL) {
             // insert test consumer key & consumer secret
-            $this->new_consumer("robin", "geheim");
+            #$this->new_consumer("robin", "geheim");
+            $this->new_consumer("robin", "geheim", "http://localhost/callbackdump.php");
             $this->new_usermap("root", 'userC', "robin");
             # in INI-format:
             #  consumer_robin=O:13:"OAuthConsumer":3:{s:3:"key";s:5:"robin";s:6:"secret";s:6:"geheim";s:12:"callback_url";N;}
@@ -55,7 +60,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
     }/*}}}*/
 
     function new_usermap($user, $type='userC', $consumer_key, $token = NULL) {/*{{{*/
-        $data = array('user' => $user, 'consumer' => $consumer_key, 'token' => $token);
+        $data = array('user' => $user, 'consumer' => $consumer_key, 'token' => $token, 'created' => time());
         if (empty($token)) $token=$consumer_key;
         if (!dba_insert("${type}_$token", serialize($data), $this->dbh))
             throw new OAuthException("doooom!");
