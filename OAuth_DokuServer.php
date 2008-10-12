@@ -36,6 +36,26 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         return ($user);
     }/*}}}*/
 
+    public function load_session($onetimepass, &$token) {/*{{{*/
+        $data=$this->data_store->get_session($onetimepass);
+        if (!is_array($data)) return NULL;
+        if (empty($data['created'])) return NULL;
+        $now = time();
+        if ($now - $data['created'] > $this->timestamp_threshold) {
+            throw new OAuthException("Expired session.");
+        }
+        $req=unserialize(rawurldecode($data['request']));
+        if (!empty($data['token'])) $token=$data['token'];
+        return $req;
+    }/*}}}*/
+
+    public function save_session($req, $token) {/*{{{*/
+        $pass=md5(time().$this->SALT.md5(time()*microtime()));
+        $data = array('request' => rawurlencode(serialize($req)), 'token' => $token, 'created' => time());
+        $this->data_store->new_session($pass, $data);
+        return $pass;
+    }/*}}}*/
+
 }/*}}}*/
 
 
@@ -51,7 +71,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
             #$this->new_consumer("robin", "geheim");
             $this->new_consumer("robin", "geheim", "http://localhost/callbackdump.php");
             // map_consumer:
-            $this->new_usermap(array('suid' => 'rgareus', 'users'=>NULL, 'timeout' => 0), 'userC', "robin");
+            $this->new_usermap(array('suid' => '', 'users'=>NULL, 'timeout' => 0), 'userC', "robin");
             # in INI-format:
             #  consumer_robin=O:13:"OAuthConsumer":3:{s:3:"key";s:5:"robin";s:6:"secret";s:6:"geheim";s:12:"callback_url";N;}
             #  userC_robin=a:3:{s:4:"user";s:7:"rgareus";s:5:"token";s:5:"robin";s:6:"access";N;}
@@ -68,10 +88,22 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         if (empty($token)) $token=$consumer_key;
         if (!dba_insert("${type}_$token", serialize($data), $this->dbh))
             throw new OAuthException("doooom!");
-        }/*}}}*/
+    }/*}}}*/
 
-        function del_usermap($type='userT', $token) {/*{{{*/
+    function del_usermap($type='userT', $token) {/*{{{*/
         dba_delete("${type}_$token", $this->dbh);
+    }/*}}}*/
+
+    function new_session($pass, $data) {/*{{{*/
+        if (!dba_insert("session_$pass", serialize($data), $this->dbh))
+            throw new OAuthException("doooom!");
+    }/*}}}*/
+
+    function get_session($pass) {/*{{{*/
+        $rv = dba_fetch("session_$pass", $this->dbh);
+        if ($rv === FALSE) return NULL;
+        dba_delete("session_".$pass, $this->dbh);
+        return unserialize($rv);
     }/*}}}*/
 
     function lookup_consumeracl($consumer_key) {/*{{{*/
@@ -129,7 +161,8 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         $handle_later = array();
         while ($key != false) {
         # and clean up old-ones  -> oauth_timestamp ;; OAuthServer->timestamp_threshold (300 sec)
-            if (!strncmp($key,"nonce_",6) && dba_fetch($key, $this->dbh) + 300 < $now) 
+        # give it some extra hour(s) eg. server changes time-zones...
+            if (!strncmp($key,"nonce_",6) && dba_fetch($key, $this->dbh) + 3900 < $now) 
                 $handle_later[] = $key;
             $key = dba_nextkey($this->dbh);
         }
