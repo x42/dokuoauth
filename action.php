@@ -39,13 +39,17 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
     }
 
+    /**
+     *
+     */
     function handle_act_authhook(&$event, $param){
         if (is_array($_REQUEST['do']) && !empty($_REQUEST['do']['oauth'])) return; // skip requests to oauth-API
+
         /// temp. workaround 
         /// until OAuth.php fixes request-parameter arrays alike do['oauth']=token..
         if (in_array($_REQUEST['do'], array("requesttoken", "accesstoken"))){
             $data=array('oauth' => $_REQUEST['do']);
-            $this->_debug("workaround do[oauth]: ".print_r($event,true));
+            #$this->_debug("workaround do[oauth]: ".print_r($event,true));
             $ev=new Doku_Event("OAUTH_ACT_PREPROCESS", $data);
             $this->handle_act_preprocess($ev, NULL);
             unset($ev);
@@ -59,7 +63,6 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             // verify signature - check consumer and access token
             try {
                 $req = OAuthRequest::from_request();
-
                 list($consumer, $token) = $doku_server->verify_request($req);
                 $user=$doku_server->get_dokuwiki_user($consumer, $token);
 
@@ -86,14 +89,24 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         }
     }
 
+
+# FLOW;
+# - [admin,user,auto] add consumer 
+# - get request-token
+#    [auto] if consumer is suid (no-browser - return token or redirect to consumer)
+#    [auto] if user is logged-on and has whitelisted the consumer -> redirect to consumer
+#    [user] if user is logged-on -> as for confirmation  -> redirect to consumer
+#    [user] log-in (remember consumer) -> try-again to check/ask for confirmation -> redirect to consumer
+#
+# - [auto] get access-token (done)
+#    check if request token is valid for this consumer and has a dokuwiki user mapped to it..  
+#
     /**
      *
      */
     function handle_act_preprocess(&$event, $param){
         $handled=false;
-        print_r($event->data);
         if (!empty($event->data['oauth'])) {
-            #echo "hello robin,<br/>\n";
             // interactive oAuth - admin
             require_once("dokuoauth.php");
             try {
@@ -104,7 +117,10 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         # TODO - check if given request token has been authorized by user.. 
                         $req = OAuthRequest::from_request();
                         $token = $doku_server->fetch_access_token($req);
-                        # TODO: map user to access-token.
+                        # DokuOAuthDataStore: 
+                        #  - tests if given request-token has been (authorized by|mapped to) a user 
+                        #  - if not user found: `fetch_access_token()` returns NULL!
+                        #     else the request-token is exchanged for an access-token, retraining the user mapping
                         print $token;
                         break;
                     case 'authorize':
@@ -124,7 +140,8 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $token = $doku_server->fetch_request_token($req);
                         // TODO get authorized/logged-on username.
                         $user='rgareus';
-                        $consumer_key=$_REQUEST['oauth_consumer_key']; // TODO: create Consumer Class?
+                        $op=$req->get_parameters();
+                        $consumer_key=$op['oauth_consumer_key']; // TODO: create Consumer Class?!
                         $aclimit = $doku_server->get_consumeracl($consumer_key); 
                         // TODO: check if user is elidgeble for for this consumer
                         
@@ -163,7 +180,8 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         }
         $vhost=DOKU_URL;
         error_log($vhost.' '.date("c ").$m."\n", 3, $PSlogfile);
-    } /*}}}*/
+    } 
+    /*}}}*/
 
 }
 //Setup VIM: ex: et sw=4 ts=4 enc=utf-8 :
