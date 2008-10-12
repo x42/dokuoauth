@@ -113,18 +113,19 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
     #   global $ID;
         global $auth;
 
-        print p_locale_xhtml('login');
+        print '<h1>Confirm</h1>'.NL;
         print '<h3>OAuth - Confirm</h3>'.NL;
         print '<div class="centeralign">'.NL;
         $form = new Doku_Form('dw__oauth');
         $form->startFieldset($lang['btn_login']);
     #   $form->addHidden('id', $ID);
-        $form->addHidden('do[oauth]', 'resume');
+    #   $form->addHidden('do[oauth]', 'resume');
         $form->addHidden('dwoauthnonce', $secpass);
-        $form->addElement(form_makeTextField('u', $_REQUEST['u'], $lang['user'], 'focus__this', 'block'));
-        $form->addElement(form_makePasswordField('p', $lang['pass'], '', 'block'));
-    #   $form->addElement(form_makeCheckboxField('r', '1', $lang['remember'], 'remember__me', 'simple'));
-        $form->addElement(form_makeButton('submit', '', $lang['btn_login']));
+        $form->addElement(form_makeCheckboxField('userconfirmed', '1', 'allow request', 'allow_this', 'simple'));
+        $form->addElement(form_makeCheckboxField('trustconsumer', '1', $lang['remember'], 'remember__me', 'simple'));
+        $form->addElement(form_makeButton('submit', 'oauth', 'resume'));
+    #   $form->addElement(form_makeButton('submit', '', 'cancel'));
+        $form->addElement(form_makeButton('submit', 'oauth', 'cancel'));
         $form->endFieldset();
         html_form('login', $form);
     }

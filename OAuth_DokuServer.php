@@ -36,6 +36,16 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         return ($user);
     }/*}}}*/
 
+    public function get_consumer_settings($consumer_key) {/*{{{*/
+        return $this->data_store->get_consettings($consumer_key);
+        #return array('trusted' => array('rgareus')); // XXX auto-confirm
+    }/*}}}*/
+
+    public function set_consumer_settings($consumer_key,$cs) {/*{{{*/
+        $data=$this->data_store->set_consettings($consumer_key,$cs);
+        return TRUE;
+    }/*}}}*/
+
     public function load_session($onetimepass, &$token) {/*{{{*/
         $data=$this->data_store->get_session($onetimepass);
         if (!is_array($data)) return NULL;
@@ -93,6 +103,19 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
     function del_usermap($type='userT', $token) {/*{{{*/
         dba_delete("${type}_$token", $this->dbh);
     }/*}}}*/
+
+    function set_consettings($key, $data) {/*{{{*/
+        dba_delete("settings_$key", $this->dbh);
+        if (!dba_insert("settings_$key", serialize($data), $this->dbh))
+            throw new OAuthException("doooom!");
+    }/*}}}*/
+
+    function get_consettings($key) {/*{{{*/
+        $rv = dba_fetch("settings_$key", $this->dbh);
+        if ($rv === FALSE) return NULL;
+        return unserialize($rv);
+    }/*}}}*/
+
 
     function new_session($pass, $data) {/*{{{*/
         if (!dba_insert("session_$pass", serialize($data), $this->dbh))
@@ -212,7 +235,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
           return FALSE;
         }
         $this->del_usermap('userT', $token->key);
-            $this->new_usermap($user, 'userT', $consumer->key, $actok->key);
+        $this->new_usermap($user, 'userT', $consumer->key, $actok->key);
         return $actok;
     }/*}}}*/
 

@@ -104,7 +104,15 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             try {
                 switch (trim($event->data['oauth'])) {
                     case 'addconsumer':
-                        // TODO
+                        $consumer_key="robin";
+                        $consumer_sec="geheim";
+                        $consumer_cal="http://localhost/callbackdump.php";
+                        $consumer_cal=NULL;
+                        break;
+                        // TODO 
+                        $doku_server->create_consumer($consumer_key, $consumer_sec, $consumer_cal);
+                        $acllimit=array('suid' => '', 'users'=>NULL, 'timeout' => 0);
+                        $doku_server->map_consumer($consumer_key, $acllimit);
                         break;
                     case 'accesstoken':
                         $this->_debug('access');
@@ -121,11 +129,20 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         print $token;
                         break;
 
+                    case 'cancel':
+                        $req=$doku_server->load_session($_REQUEST['dwoauthnonce'],&$token);
+                        $op=$req->get_parameters();
+                        $consumer_key=$op['oauth_consumer_key'];
+                        $consumer = $doku_server->get_consumer_by_key($consumer_key);
+                        $this->redirect($consumer->callback_url, array());
+                        break;
                     case 'resume':
                         $req=$doku_server->load_session($_REQUEST['dwoauthnonce'],&$token);
                         if (!isset($req)) {
                             break;
                         }
+                        $userconfirmed=$_REQUEST['userconfirmed']?true:false;
+                        $trustconsumer=$_REQUEST['trustconsumer']?true:false;
                     case 'authorize':
                     case 'requesttoken':
                         $this->_debug('authorize');
@@ -160,14 +177,23 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             break;
                         }
 
-                        if (!$this->check_consumer_confirm($doku_server, $user, $consumer_key, $token)) {
-                            if (!($helper = &plugin_load('helper', 'oauth'))){
-                                trigger_error('oauth plugin helper is not available.');
+                        if (!$userconfirmed) {
+                            if (!$this->check_consumer_confirm($doku_server, $user, $consumer_key, $token)) {
+                                if (!($helper = &plugin_load('helper', 'oauth'))){
+                                    trigger_error('oauth plugin helper is not available.');
+                                    break;
+                                }
+                                $secpass=$doku_server->save_session($req,$token);
+                                $helper->oauthConfirm($secpass,2,3);
                                 break;
                             }
-                            $secpass=$doku_server->save_session($req,$token);
-                            $helper->oauthConfirm($secpass,2,3);
-                            break;
+                        }
+                        if ($trustconsumer) {
+                            //TODO  save confirmation for next time.. (unless SUID ?!)
+                            $cs=$doku_server->get_consumer_settings($consumer_key); 
+                            if (!is_array($cs['trusted'])) $cs['trusted']=array();
+                            $cs['trusted']=array_unique(array_merge($cs['trusted'],array($user)));
+                            $doku_server->set_consumer_settings($consumer_key,$cs); 
                         }
 
                         $doku_server->map_user($user,$consumer_key, $token->key);
@@ -210,16 +236,20 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         } 
         if ($_SERVER['REMOTE_USER']) {
             $user=$_SERVER['REMOTE_USER'];
-            $this->_debug("dokuwiki already authenticated used.");
+            $this->_debug("dokuwiki already authenticated user: $user");
         } else if (auth_login("","",false,true)) {
-            $this->_debug("logged in used by COOKIE..");
-        # auth_login($_REQUEST['u'],$_REQUEST['p'],$_REQUEST['r'],false,true); # workaround for workaround above ;)
+        #          auth_login($_REQUEST['u'],$_REQUEST['p'],$_REQUEST['r'],false,true); # workaround for workaround above ;)
+            $this->_debug("user logged-in via COOKIE: $user");
             global $USERINFO;
             $user=$_SERVER['REMOTE_USER'];
         }
-        // TODO : check acllimit array..
-        // check group, not is_admin, etc.
-        #if (!in_array($user, $acllimit['users'])) $user=NULL;
+        // TODO: check group(s), not is_admin, etc.
+        if (is_array($acllimit['users']) && !in_array($user, $acllimit['users'])) { 
+            $this->_debug("denied user '$user' for this consumer.");
+            msg("Consumer is not allowed access to this user.");
+            #auth_logoff();
+            $user=NULL;
+        }
 
         return $user;
     }/*}}}*/
@@ -229,11 +259,10 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         if (is_array($acllimit) && !empty($acllimit['suid'])) return true;
 
         // TODO: check database ... for user <> consumer  user-whitelist (auto-confirm)
-        // TODO: check database ... for user <> consumer  user-confirmed
-        # can eventually use 
-        #   $doku_server->map_user($user,$consumer_key, $token->key);
-        # and get_dokuwiki_user(..) with dokuwiki-POST..
-        return true; /// XXX
+        $cs=$doku_server->get_consumer_settings($consumer_key); 
+        if (!is_array($cs['trusted']) || !in_array($user, $cs['trusted'])) return false;
+
+        return true; 
     }
 
     private function redirect($uri, $params) {/*{{{*/
