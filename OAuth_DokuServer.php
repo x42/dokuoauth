@@ -38,7 +38,6 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
 
     public function get_consumer_settings($consumer_key) {/*{{{*/
         return $this->data_store->get_consettings($consumer_key);
-        #return array('trusted' => array('rgareus')); // XXX auto-confirm
     }/*}}}*/
 
     public function set_consumer_settings($consumer_key,$cs) {/*{{{*/
@@ -198,7 +197,6 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         if (dba_exists("nonce_$nonce", $this->dbh)) {
             return TRUE;
         } else {
-            # TODO: timestamp nonce 
             dba_insert("nonce_$nonce", time(), $this->dbh);
             $this->cleanup_nonce();
             return FALSE;

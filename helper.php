@@ -18,6 +18,24 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         ;
     }
 
+    // TODO:
+    #  - general feedback page, error, info
+    #  - Consumer Admin
+    #    - add/generate consumer key&pass,url (later: disco)
+    #    - list consumer  (key, admin: key&pass)
+    #    - edit consuer settings, callback-URL?
+    #    - delete consumer, blacklist consumer: users=array();
+    #  - Token Admin    
+    #    - list access|request token 
+    #      - per user
+    #      - per consumer
+    #    - revoke access tokens 
+
+    # - prepare for time-window, validity of token and/or consumer.
+    #   or revoke token after N requests
+
+    # - prepare for user/group-admin (for consumers)
+
     /**
      * return some info
      */

@@ -69,7 +69,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             global $USERINFO;
             global $auth;
             $USERINFO = $auth->getUserData($user);
-            if (!is_array($USERINFO)) { // XXX
+            if (!is_array($USERINFO)) {
                 $_SERVER['REMOTE_USER'] = "";
                 $this->_debug('oAuth: could not find user: '.$user);
             } 
@@ -104,63 +104,67 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             try {
                 switch (trim($event->data['oauth'])) {
                     case 'addconsumer':
+                        $handled=true;
                         $consumer_key="robin";
                         $consumer_sec="geheim";
                         $consumer_cal="http://localhost/callbackdump.php";
                         $consumer_cal=NULL;
-                        break;
-                        // TODO 
+                        break; // TODO 
                         $doku_server->create_consumer($consumer_key, $consumer_sec, $consumer_cal);
                         $acllimit=array('suid' => '', 'users'=>NULL, 'timeout' => 0);
                         $doku_server->map_consumer($consumer_key, $acllimit);
                         break;
+
                     case 'accesstoken':
                         $this->_debug('access');
                         $handled=true;
                         $req = OAuthRequest::from_request();
-                        # TODO: verify request using consumer&request token?!
-                        //list($consumer, $token) = $doku_server->verify_request($req);
 
                         # DokuOAuthDataStore for access tokens:
                         #  - tests if given request-token has been (authorized by|mapped to) a user 
                         #  - if not user found: `fetch_access_token()` returns NULL!
                         #     else the request-token is exchanged for an access-token, retraining the user mapping
+                        # fetch_access_token requires a valid oauth signature.
                         $token = $doku_server->fetch_access_token($req);
                         print $token;
+                        exit(0);
                         break;
 
                     case 'cancel':
+                        $handled=true;
                         $req=$doku_server->load_session($_REQUEST['dwoauthnonce'],&$token);
                         $op=$req->get_parameters();
                         $consumer_key=$op['oauth_consumer_key'];
                         $consumer = $doku_server->get_consumer_by_key($consumer_key);
                         $this->redirect($consumer->callback_url, array());
                         break;
+
                     case 'resume':
                         $req=$doku_server->load_session($_REQUEST['dwoauthnonce'],&$token);
                         if (!isset($req)) {
-                            break;
+                            trigger_error('Failed to load/resume session.');
+                            exit(0);
                         }
                         $userconfirmed=$_REQUEST['userconfirmed']?true:false;
                         $trustconsumer=$_REQUEST['trustconsumer']?true:false;
                     case 'authorize':
-                    case 'requesttoken':
+                    case 'requesttoken': # TODO: allow to get an unmapped request-token.. read oauth_token and oauth_callback when re-entering
                         $this->_debug('authorize');
+                        $handled=true;
 
                         if (!isset($req)) {
                             $req = OAuthRequest::from_request();
-                            // verify signature here ?!
-                            //list($consumer, $token) = $doku_server->verify_request($req);
                         }
                         if (!($req instanceof OAuthRequest)) {
                             trigger_error('Can not parse oAuth request.');
-                            break;
+                            exit(0);
                         }
 
                         $op=$req->get_parameters();
                         $consumer_key=$op['oauth_consumer_key'];
 
                         if (!($token instanceof OAuthToken)) {
+                            # this requires a valid oauth signature!
                             $token = $doku_server->fetch_request_token($req);
                         }
 
@@ -170,7 +174,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         if (empty($user)) {
                             if (!($helper = &plugin_load('helper', 'oauth'))){
                                 trigger_error('oauth plugin helper is not available.');
-                                break;
+                                exit(0);
                             }
                             $secpass=$doku_server->save_session($req,$token);
                             $helper->oauthLogon($secpass,2,3);
@@ -181,6 +185,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             if (!$this->check_consumer_confirm($doku_server, $user, $consumer_key, $token)) {
                                 if (!($helper = &plugin_load('helper', 'oauth'))){
                                     trigger_error('oauth plugin helper is not available.');
+                                    exit(0);
                                     break;
                                 }
                                 $secpass=$doku_server->save_session($req,$token);
@@ -189,7 +194,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             }
                         }
                         if ($trustconsumer) {
-                            //TODO  save confirmation for next time.. (unless SUID ?!)
+                            // save confirmation for next time.. (TODO: unless SUID ?!)
                             $cs=$doku_server->get_consumer_settings($consumer_key); 
                             if (!is_array($cs['trusted'])) $cs['trusted']=array();
                             $cs['trusted']=array_unique(array_merge($cs['trusted'],array($user)));
@@ -208,6 +213,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                                     ));
                         } else  {
                             print $token;
+                            exit(0);
                         }
                         break;
                     default:
@@ -222,11 +228,15 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         }
 
         if ($handled) {
-            exit(0); // prevent further output..
-            $event->stopPropagation();
-            $event->preventDefault();
+            #$this->_debug('handled');
+            #$event->stopPropagation();
+            #$event->preventDefault();
+            #$event->result = true;
+            #$event->data="show";
+            exit(0);
         }
     }
+
     private function check_consumer_acl($doku_server, $consumer_key) {/*{{{*/
         $acllimit = $doku_server->get_consumer_acl($consumer_key);
         $user=NULL;
@@ -258,7 +268,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         $acllimit = $doku_server->get_consumer_acl($consumer_key);
         if (is_array($acllimit) && !empty($acllimit['suid'])) return true;
 
-        // TODO: check database ... for user <> consumer  user-whitelist (auto-confirm)
+        // check database ... for user <> consumer  user-whitelist (auto-confirm)
         $cs=$doku_server->get_consumer_settings($consumer_key); 
         if (!is_array($cs['trusted']) || !in_array($user, $cs['trusted'])) return false;
 
