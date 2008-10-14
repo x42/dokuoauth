@@ -98,6 +98,20 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
      */
     function handle_act_preprocess(&$event, $param){
         $handled=false;
+        $map_token=false; 
+        $user_notified=false; 
+        $dwoauthnonce=rawurldecode($_REQUEST['dwoauthnonce']);
+
+        // LOGIN PAGE WORKAROUND
+        global $ID; 
+        if ($event->data=='login' && !strncasecmp($ID,"OAUTHPLUGIN:",12)) {
+            $dwoauthnonce=rawurldecode(substr($ID,12));
+            unset($event->data);
+            $event->data=array();
+            $event->data['oauth']='resume';
+        }
+        // END LOGIN PAGE WORKAROUND
+
         if (!empty($event->data['oauth'])) {
             // interactive oAuth - admin
             require_once("dokuoauth.php");
@@ -132,7 +146,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
                     case 'cancel':
                         $handled=true;
-                        $req=$doku_server->load_session($_REQUEST['dwoauthnonce'],&$token);
+                        $req=$doku_server->load_session($dwoauthnonce,&$token);
                         $op=$req->get_parameters();
                         $consumer_key=$op['oauth_consumer_key'];
                         $consumer = $doku_server->get_consumer_by_key($consumer_key);
@@ -140,7 +154,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         break;
 
                     case 'resume':
-                        $req=$doku_server->load_session($_REQUEST['dwoauthnonce'],&$token);
+                        $req=$doku_server->load_session($dwoauthnonce,&$token);
                         if (!isset($req)) {
                             trigger_error('Failed to load/resume session.');
                             exit(0);
@@ -171,29 +185,48 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         # check-consumer_acl() honors dokuwiki-auth
                         $user = $this->check_consumer_acl($doku_server, $consumer_key);
 
-                        if (empty($user)) {
+                        if (!empty($user)) {
+                            $map_token=true; 
+                        } else if (1) { // return unauthorized token ?!
+                            $secpass=$doku_server->save_session($req,$token);
+                            $user_notified=true; 
+                        /*
                             if (!($helper = &plugin_load('helper', 'oauth'))){
                                 trigger_error('oauth plugin helper is not available.');
                                 exit(0);
                             }
-                            $secpass=$doku_server->save_session($req,$token);
                             $helper->oauthLogon($secpass,2,3);
-                            break;
+                         */
+                            // LOGIN PAGE WORKAROUND
+                            global $ID; $ID="OAUTHPLUGIN:".rawurlencode($secpass);
+                            $map_token=false; $handled=false; $event->data="login"; // XXX
+                            // END LOGIN PAGE WORKAROUND
+                            break; 
+                        } else {
+                            $map_token=false; 
+                            $user_notified=false; 
                         }
 
-                        if (!$userconfirmed) {
+                        if ($map_token && !$userconfirmed) {
                             if (!$this->check_consumer_confirm($doku_server, $user, $consumer_key, $token)) {
-                                if (!($helper = &plugin_load('helper', 'oauth'))){
-                                    trigger_error('oauth plugin helper is not available.');
-                                    exit(0);
+                                if (1) { // return unauthorized token ?!
+                                    if (!($helper = &plugin_load('helper', 'oauth'))){
+                                        trigger_error('oauth plugin helper is not available.');
+                                        exit(0);
+                                        break;
+                                    }
+                                    $secpass=$doku_server->save_session($req,$token);
+                                    $helper->oauthConfirm($secpass,2,3);
+                                    $user_notified=true; 
                                     break;
+                                } else {
+                                    $map_token=false; 
+                                    $user_notified=false; 
                                 }
-                                $secpass=$doku_server->save_session($req,$token);
-                                $helper->oauthConfirm($secpass,2,3);
-                                break;
                             }
                         }
-                        if ($trustconsumer) {
+
+                        if ($map_token && $trustconsumer) {
                             // save confirmation for next time.. (TODO: unless SUID ?!)
                             $cs=$doku_server->get_consumer_settings($consumer_key); 
                             if (!is_array($cs['trusted'])) $cs['trusted']=array();
@@ -201,7 +234,13 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $doku_server->set_consumer_settings($consumer_key,$cs); 
                         }
 
-                        $doku_server->map_user($user,$consumer_key, $token->key);
+                        if ($map_token) {
+                            $doku_server->map_user($user,$consumer_key, $token->key);
+                        }
+
+                        if (!$user_notified) {
+                            ; // send email ?! ..
+                        }
 
                         // redirect back to $consumer->callback_url add $request-token.
                         $consumer = $doku_server->get_consumer_by_key($consumer_key);
@@ -209,7 +248,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $this->redirect($consumer->callback_url, array(
                                     'oauth_token'=>rawurlencode($token->key),
                                     'oauth_token_secret'=>rawurlencode($token->secret)
-                                    # TODO: include xoauth parameters
+                                    # TODO: include xoauth parameters ?!
                                     ));
                         } else  {
                             print $token;

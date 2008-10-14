@@ -92,7 +92,6 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         if(function_exists('html_msgarea')){
             html_msgarea();
         }
-  //    include(template('main.php'));
         $this->printConfirm($secpass, $opt);
         $this->printFooter();
         exit;
@@ -107,7 +106,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
     #   global $ID;
         global $auth;
 
-        print p_locale_xhtml('login');
+        print '<h1>OAuth Login</h1>'.NL;
         print '<h3>OAuth</h3>'.NL;
         print '<div class="centeralign">'.NL;
         $form = new Doku_Form('dw__oauth');
@@ -122,6 +121,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         $form->endFieldset();
         html_form('login', $form);
     }
+
     /**
      *
      */
@@ -133,6 +133,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
 
         print '<h1>Confirm</h1>'.NL;
         print '<h3>OAuth - Confirm</h3>'.NL;
+        // TODO: inform about username, consumer and token..
         print '<div class="centeralign">'.NL;
         $form = new Doku_Form('dw__oauth');
         $form->startFieldset($lang['btn_login']);
@@ -145,7 +146,9 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
     #   $form->addElement(form_makeButton('submit', '', 'cancel'));
         $form->addElement(form_makeButton('submit', 'oauth', 'cancel'));
         $form->endFieldset();
-        html_form('login', $form);
+
+        // TODO: re-login button.. 
+        html_form('confirm', $form);
     }
 /*
     private function printFormXXX($data, $options, $whatever = NULL) {
@@ -179,7 +182,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
     }
 
   /**
-   *  - TODO this should use the dokuwiki template header.
+   *  FIXME this should use the dokuwiki template
    */
     private function printHeader() {
         global $conf;
