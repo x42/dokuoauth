@@ -52,7 +52,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             try {
                 $req = OAuthRequest::from_request();
                 list($consumer, $token) = $doku_server->verify_request($req);
-                $user=$doku_server->get_dokuwiki_user($consumer, $token);
+                $user=$doku_server->get_dokuwiki_user($consumer->key, $token->key);
 
             } catch (OAuthException $e) {
                 print($e->getMessage() . "\n<hr />\n");
@@ -98,8 +98,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
      */
     function handle_act_preprocess(&$event, $param){
         $handled=false;
-        $map_token=false; 
-        $user_notified=false; 
+        $user_notified=false;  // XXX
         $dwoauthnonce=rawurldecode($_REQUEST['dwoauthnonce']);
 
         // LOGIN PAGE WORKAROUND
@@ -117,20 +116,40 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             require_once("dokuoauth.php");
             try {
                 switch (trim($event->data['oauth'])) {
+
+                    case 'cancel':
+                        $this->_debug('ACT: cancel');
+                        $handled=true;
+                        $consumer_key='';
+                        if($ses=$doku_server->load_session($dwoauthnonce))
+                            $consumer_key=$ses['consumer_key'];
+                        if (!empty($consumer_key)) {
+                            $consumer = $doku_server->get_consumer_by_key($consumer_key);
+                            if (!empty($consumer) && ($req instanceof OAuthConsumer)) {
+                                if (!empty($consumer->callback_url)) {
+                                    $this->redirect($consumer->callback_url, array());
+                                    break;
+                                }
+                            }
+                        }
+                        # TODO: $helper->cancelled(); page
+                        break;
+
                     case 'addconsumer':
+                        $this->_debug('ACT: addconsumer');
                         $handled=true;
                         $consumer_key="robin";
                         $consumer_sec="geheim";
                         $consumer_cal="http://localhost/callbackdump.php";
                         $consumer_cal=NULL;
-                        break; // TODO 
+                        break; // TODO  -- 
                         $doku_server->create_consumer($consumer_key, $consumer_sec, $consumer_cal);
                         $acllimit=array('suid' => '', 'users'=>NULL, 'timeout' => 0);
                         $doku_server->map_consumer($consumer_key, $acllimit);
                         break;
 
-                    case 'accesstoken':
-                        $this->_debug('access');
+                    case 'accesstoken': // exchange [authorized] request-token for an access-token.
+                        $this->_debug('ACT: accesstoken');
                         $handled=true;
                         $req = OAuthRequest::from_request();
 
@@ -138,69 +157,93 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         #  - tests if given request-token has been (authorized by|mapped to) a user 
                         #  - if not user found: `fetch_access_token()` returns NULL!
                         #     else the request-token is exchanged for an access-token, retraining the user mapping
-                        # fetch_access_token requires a valid oauth signature.
                         $token = $doku_server->fetch_access_token($req);
-                        if ($token && $req instanceof OAuthToken)
+                        if ($token && $token instanceof OAuthToken)
                             print $token;
-
+                        else {
+                            #trigger_error('request token is invalid not not authorized.'); 
+                            $this->_debug("failed to exchange request for access token.");
+                        }
                         exit(0);
-                        break;
 
-                    case 'cancel':
+                    case 'requesttoken':  // request a request-token
+                        $this->_debug('ACT: requesttoken');
                         $handled=true;
-                        $req=$doku_server->load_session($dwoauthnonce,&$token);
+                        $req = OAuthRequest::from_request();
+                        $token = $doku_server->fetch_request_token($req);
+
                         $op=$req->get_parameters();
                         $consumer_key=$op['oauth_consumer_key'];
-                        $consumer = $doku_server->get_consumer_by_key($consumer_key);
-                        $this->redirect($consumer->callback_url, array());
-                        break;
+
+                        # auto-authorize suid tokens
+                        $user = $this->check_consumer_acl($doku_server, $consumer_key);
+                        if (!empty($user)) {
+                            $doku_server->map_user($user,$consumer_key, $token->key);
+                            $doku_server->map_requesttoken($consumer_key, $token->key); // will be deleted when getting access-token.
+                        } else {
+                            //remember consumer key for this token until authorization.
+                            $doku_server->map_requesttoken($consumer_key, $token->key);
+                        }
+                        print $token;
+                        exit(0);
 
                     case 'resume':
-                        $req=$doku_server->load_session($dwoauthnonce,&$token);
-                        if (!isset($req)) {
-                            trigger_error('Failed to load/resume session.');
+                        $this->_debug('ACT: resume authentication');
+                        $ses=$doku_server->load_session($dwoauthnonce);
+                        if (!is_array($ses)) {
+                            trigger_error('can not resume this session.'); 
                             exit(0);
                         }
+                        $consumer_key=$ses['consumer_key'];
+                        $token_key=$ses['token_key'];
+                        $callback_url=$ses['oauth_callback'];
+
                         $userconfirmed=$_REQUEST['userconfirmed']?true:false;
                         $trustconsumer=$_REQUEST['trustconsumer']?true:false;
+                        $user_notified=true; // XXX
                     case 'authorize':
-                        if (!isset($req)) {
-                        # TODO: allow to enter here to log-in with or without 'oauth_token' 
-                        # fake $req and $token 
-                        #
-                        # $req=new OAuthRequest();
-                        # set parameter 'oauth_consumer_key'
-                        #
-                        # check if already mapped!
+                        $this->_debug('ACT: authorize');
+                        if (empty($token_key)) {
+                            $token_key=$_REQUEST['oauth_token'];
                         }
-                    case 'requesttoken': # TODO: allow to get an unmapped request-token.. (read oauth_token and oauth_callback when re-entering)
-                        $this->_debug('authorize');
-                        $handled=true;
 
-                        if (!isset($req)) {
-                            $req = OAuthRequest::from_request();
+                        if (empty($token_key)) {
+                            // TODO -> ask user for token!
+                            trigger_error('no oauth_token given for authorization.'); exit(0);
                         }
-                        if (!($req instanceof OAuthRequest)) {
-                            trigger_error('Can not parse oAuth request.');
+                        if (empty($consumer_key)) {
+                            # TODO parse or lookup consumer for this token ...
+                            #$consumer_key=$_REQUEST['oauth_consumer_key'];
+                            $consumer_key=$doku_server->get_consumer_by_requesttoken($token_key);
+                        }
+                        if (empty($callback_url)) {
+                            $callback_url = $REQUEST['oauth_callback'];
+                        }
+
+                    case 'XXXauth': 
+                        $this->_debug('ACT: authorize step 2 t:'.$token_key.' c:'.$consumer_key);
+                        $handled=true; // XXX
+
+                        # we need a request-token-key and consumer-key 
+                        if (empty($token_key) || empty($consumer_key)) {
+                            trigger_error('insufficient info to grant token authorization.');
                             exit(0);
                         }
 
-                        $op=$req->get_parameters();
-                        $consumer_key=$op['oauth_consumer_key'];
-
-                        if (!($token instanceof OAuthToken)) {
-                            # this requires a valid oauth signature!
-                            $token = $doku_server->fetch_request_token($req);
+                        $user = $doku_server->get_dokuwiki_user($consumer_key, $token_key);
+                        if (!empty($user)) {
+                            trigger_error('token is already authorized for user:'.$user);
+                            exit(0);
                         }
 
-                        # check-consumer_acl() honors dokuwiki-auth
                         $user = $this->check_consumer_acl($doku_server, $consumer_key);
+                        if (empty($user)) {
+                            $user = $this->check_doku_auth($doku_server, $consumer_key);
+                        }
 
-                        if (!empty($user)) {
-                            $map_token=true; 
-                        } else if (1) { // return unauthorized token ?!
-                            $secpass=$doku_server->save_session($req,$token);
-                            $user_notified=true; 
+                        if (empty($user)) {
+                            $secpass=$doku_server->save_session(array('consumer_key' =>$consumer_key, 'token_key' => $token_key, 'oauth_callback' => $callback_url));
+                            $user_notified=true;  // XXX
                         /*
                             if (!($helper = &plugin_load('helper', 'oauth'))){
                                 trigger_error('oauth plugin helper is not available.');
@@ -210,36 +253,26 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                          */
                             // LOGIN PAGE WORKAROUND
                             global $ID; $ID="OAUTHPLUGIN:".rawurlencode($secpass);
-                            $map_token=false; $handled=false; $event->data="login"; // XXX
+                            $handled=false; $event->data="login"; // XXX
                             // END LOGIN PAGE WORKAROUND
                             break; 
-                        } else {
-                            $map_token=false; 
-                            $user_notified=false; 
                         }
 
-                        if ($map_token && !$userconfirmed) {
+                        if (!$userconfirmed) {
                             if (!$this->check_consumer_confirm($doku_server, $user, $consumer_key, $token)) {
-                                if (1) { // return unauthorized token ?!
-                                    if (!($helper = &plugin_load('helper', 'oauth'))){
-                                        trigger_error('oauth plugin helper is not available.');
-                                        exit(0);
-                                        break;
-                                    }
-                                    $secpass=$doku_server->save_session($req,$token);
-                                    $helper->oauthConfirm($secpass,2,3);
-                                    $user_notified=true; 
+                                if (!($helper = &plugin_load('helper', 'oauth'))){
+                                    trigger_error('oauth plugin helper is not available.');
+                                    exit(0);
                                     break;
-                                } else {
-                                    $map_token=false; 
-                                    $user_notified=false; 
                                 }
+                                $secpass=$doku_server->save_session(array('consumer_key' =>$consumer_key, 'token_key' => $token_key, 'oauth_callback' => $callback_url));
+                                $helper->oauthConfirm($secpass,2,3);
+                                $user_notified=true;  // XXX
+                                break;
                             }
                         }
 
-                        # TODO: test if token is already mapped..
-
-                        if ($map_token && $trustconsumer) {
+                        if ($trustconsumer) {
                             // save confirmation for next time.. (TODO: unless SUID ?!)
                             $cs=$doku_server->get_consumer_settings($consumer_key); 
                             if (!is_array($cs['trusted'])) $cs['trusted']=array();
@@ -247,27 +280,32 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $doku_server->set_consumer_settings($consumer_key,$cs); 
                         }
 
-                        if ($map_token) {
-                            $doku_server->map_user($user,$consumer_key, $token->key);
-                        }
+                        $doku_server->map_user($user, $consumer_key, $token_key);
 
-                        if (!$user_notified) {
+                        # NOTE: userX (consumer/request-token map for 'resume' auth is removed when exchanging the token!
+                        # we could also remove it now with map_user..
+
+                        if (!$user_notified) { // XXX
                             ; // send email ?! ..
                         }
 
-                        // redirect back to $consumer->callback_url add $request-token.
-                        $consumer = $doku_server->get_consumer_by_key($consumer_key);
-                        if (!empty($consumer->callback_url)) {
-                            $this->redirect($consumer->callback_url, array(
-                                    'oauth_token'=>rawurlencode($token->key),
-                                    'oauth_token_secret'=>rawurlencode($token->secret)
-                                    # TODO: include xoauth parameters ?!
-                                    ));
+                        # redirect back to consumer 
+
+                        if (empty($callback_url)) {
+                            $consumer = $doku_server->get_consumer_by_key($consumer_key);
+                            $callback_url=$consumer->callback_url;
+                        }
+
+                        if (!empty($callback_url)) {
+                            # TODO: include xoauth parameters ?!
+                            $this->redirect($callback_url, array('oauth_token'=>rawurlencode($token_key)));
                         } else  {
-                            print $token;
+                            $this->_debug("token-auth suceeded silently.");
+                            #TODO: tell user to go back to consumer. $token is now authorized ..
                             exit(0);
                         }
                         break;
+
                     default:
                         break;
                 }
@@ -296,6 +334,12 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
            $user = $acllimit['suid'];
            return $user;
         } 
+        return $user;
+    }/*}}}*/
+
+    private function check_doku_auth($doku_server, $consumer_key) {/*{{{*/
+        $acllimit = $doku_server->get_consumer_acl($consumer_key);
+        $user=NULL;
         if ($_SERVER['REMOTE_USER']) {
             $user=$_SERVER['REMOTE_USER'];
             $this->_debug("dokuwiki already authenticated user: $user");

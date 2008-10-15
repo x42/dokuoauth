@@ -15,6 +15,7 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         return TRUE;
     }/*}}}*/
 
+
     public function map_user($user, $consumer_key, $token) {/*{{{*/
         if (empty($user) || is_array($user)) return FALSE; 
         if (empty($consumer_key)) return FALSE; 
@@ -31,8 +32,16 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         return ($this->data_store->lookup_consumer($consumer_key));
     }/*}}}*/
 
-    public function get_dokuwiki_user($consumer, $token) {/*{{{*/
-        $user=$this->data_store->lookup_user($consumer->key, $token->key);
+    public function map_requesttoken($consumer_key, $token) {/*{{{*/
+        $this->data_store->new_usermap($consumer_key, 'userX', '!CONSUMER-KEY!', $token);
+    }/*}}}*/
+
+    public function get_consumer_by_requesttoken($token) {/*{{{*/
+        return ($this->data_store->lookup_consumermap($token));
+    }/*}}}*/
+
+    public function get_dokuwiki_user($consumer_key, $token_key) {/*{{{*/
+        $user=$this->data_store->lookup_user($consumer_key, $token_key);
         return ($user);
     }/*}}}*/
 
@@ -45,7 +54,7 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         return TRUE;
     }/*}}}*/
 
-    public function load_session($onetimepass, &$token) {/*{{{*/
+    public function load_session($onetimepass) {/*{{{*/
         $data=$this->data_store->get_session($onetimepass);
         if (!is_array($data)) return NULL;
         if (empty($data['created'])) return NULL;
@@ -53,14 +62,13 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         if ($now - $data['created'] > $this->timestamp_threshold) {
             throw new OAuthException("Expired session.");
         }
-        $req=unserialize(rawurldecode($data['request']));
-        if (!empty($data['token'])) $token=$data['token'];
-        return $req;
+        $sesdat=unserialize(rawurldecode($data['sesdat']));
+        return $sesdat;
     }/*}}}*/
 
-    public function save_session($req, $token) {/*{{{*/
+    public function save_session($sesdat) {/*{{{*/
         $pass=md5(time().$this->SALT.md5(time()*microtime()));
-        $data = array('request' => rawurlencode(serialize($req)), 'token' => $token, 'created' => time());
+        $data = array('sesdat' => rawurlencode(serialize($sesdat)), 'created' => time());
         $this->data_store->new_session($pass, $data);
         return $pass;
     }/*}}}*/
@@ -144,6 +152,15 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         return $data['user'];
     }/*}}}*/
 
+    function lookup_consumermap($token) {/*{{{*/
+        $rv = dba_fetch("userX_$token", $this->dbh);
+        if ($rv === FALSE) return NULL;
+        $data = unserialize($rv);
+        if ($data['consumer'] != '!CONSUMER-KEY!') return NULL;
+        if ($data['token'] != $token) return NULL;
+        return $data['user'];
+    }/*}}}*/
+
     function new_consumer($consumer_key, $consumer_secret, $callback_url=NULL) {/*{{{*/
         $consumer = new OAuthConsumer($consumer_key, $consumer_secret, $callback_url);
         if (!dba_insert("consumer_$consumer_key", serialize($consumer), $this->dbh)) {
@@ -223,14 +240,14 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
     }/*}}}*/
 
     function new_access_token($token, $consumer) {/*{{{*/
-        $actok = $this->new_token($consumer, 'access');
-        dba_delete("request_" . $token->key, $this->dbh);
-    #
         $user=($this->lookup_user($consumer->key, $token->key));
         if (empty($user) || is_array($user)) { 
           //dba_delete("access_" . $actok->key, $this->dbh); // cruft 
           return FALSE;
         }
+        $actok = $this->new_token($consumer, 'access');
+        dba_delete("request_" . $token->key, $this->dbh);
+        $this->del_usermap('userX', $token->key); // delete request-token/consumer link
         $this->del_usermap('userT', $token->key);
         $this->new_usermap($user, 'userT', $consumer->key, $actok->key);
         return $actok;
