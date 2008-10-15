@@ -18,6 +18,8 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         ;
     }
 
+    # this is very much work in progress...
+
     // TODO:
     #  - general feedback page, error, info
     #  - Consumer Admin

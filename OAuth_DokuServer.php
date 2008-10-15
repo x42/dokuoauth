@@ -115,7 +115,6 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         return unserialize($rv);
     }/*}}}*/
 
-
     function new_session($pass, $data) {/*{{{*/
         if (!dba_insert("session_$pass", serialize($data), $this->dbh))
             throw new OAuthException("doooom!");
@@ -229,7 +228,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
     #
         $user=($this->lookup_user($consumer->key, $token->key));
         if (empty($user) || is_array($user)) { 
-          dba_delete("access_" . $actok->key, $this->dbh);
+          //dba_delete("access_" . $actok->key, $this->dbh); // cruft 
           return FALSE;
         }
         $this->del_usermap('userT', $token->key);

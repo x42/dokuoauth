@@ -140,7 +140,9 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         #     else the request-token is exchanged for an access-token, retraining the user mapping
                         # fetch_access_token requires a valid oauth signature.
                         $token = $doku_server->fetch_access_token($req);
-                        print $token;
+                        if ($token && $req instanceof OAuthToken)
+                            print $token;
+
                         exit(0);
                         break;
 
@@ -162,7 +164,16 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $userconfirmed=$_REQUEST['userconfirmed']?true:false;
                         $trustconsumer=$_REQUEST['trustconsumer']?true:false;
                     case 'authorize':
-                    case 'requesttoken': # TODO: allow to get an unmapped request-token.. read oauth_token and oauth_callback when re-entering
+                        if (!isset($req)) {
+                        # TODO: allow to enter here to log-in with or without 'oauth_token' 
+                        # fake $req and $token 
+                        #
+                        # $req=new OAuthRequest();
+                        # set parameter 'oauth_consumer_key'
+                        #
+                        # check if already mapped!
+                        }
+                    case 'requesttoken': # TODO: allow to get an unmapped request-token.. (read oauth_token and oauth_callback when re-entering)
                         $this->_debug('authorize');
                         $handled=true;
 
@@ -225,6 +236,8 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                                 }
                             }
                         }
+
+                        # TODO: test if token is already mapped..
 
                         if ($map_token && $trustconsumer) {
                             // save confirmation for next time.. (TODO: unless SUID ?!)
