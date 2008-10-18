@@ -16,7 +16,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         return array(
             'author' => 'Robin Gareus',
             'email'  => 'robin@gareus.org',
-            'date'   => '2008-10-09',
+            'date'   => '2008-10-15',
             'name'   => 'oauth',
             'desc'   => 'Authorize User requests by oAuth',
             'url'    => 'http://mir.dnsalias.com/wiki/dokuoauth',

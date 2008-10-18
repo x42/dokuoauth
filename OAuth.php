@@ -210,6 +210,9 @@ class OAuthRequest {/*{{{*/
     else if ($http_method == "GET") {
       $req = new OAuthRequest($http_method, $http_url, $_GET);
     }
+    else if ($http_method == "POST" && $_SERVER['CONTENT_TYPE'] == 'text/xml' ) { // XML-RPC 
+      $req = new OAuthRequest($http_method, $http_url, $_GET); //XXX until there's xoauth_body_signature
+    }
     else if ($http_method == "POST") {
       $req = new OAuthRequest($http_method, $http_url, $_POST);
     }

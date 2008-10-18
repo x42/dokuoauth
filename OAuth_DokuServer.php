@@ -242,12 +242,11 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
     function new_access_token($token, $consumer) {/*{{{*/
         $user=($this->lookup_user($consumer->key, $token->key));
         if (empty($user) || is_array($user)) { 
-          //dba_delete("access_" . $actok->key, $this->dbh); // cruft 
           return FALSE;
         }
         $actok = $this->new_token($consumer, 'access');
         dba_delete("request_" . $token->key, $this->dbh);
-        $this->del_usermap('userX', $token->key); // delete request-token/consumer link
+        $this->del_usermap('userX', $token->key); // deletes request-token/consumer link
         $this->del_usermap('userT', $token->key);
         $this->new_usermap($user, 'userT', $consumer->key, $actok->key);
         return $actok;
