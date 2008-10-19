@@ -37,6 +37,10 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                               $this,
                               'handle_act_authhook');
 
+        $contr->register_hook('TPL_ACT_UNKNOWN',
+                              'BEFORE',
+                              $this,
+                              'handle_act_output');
     }
 
     /**
@@ -270,13 +274,14 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
                         if (!$userconfirmed) {
                             if (!$this->check_consumer_confirm($doku_server, $user, $consumer_key, $token)) {
-                                if (!($helper = &plugin_load('helper', 'oauth'))){
-                                    trigger_error('oauth plugin helper is not available.');
-                                    exit(0);
-                                    break;
-                                }
                                 $secpass=$doku_server->save_session(array('consumer_key' =>$consumer_key, 'token_key' => $token_key, 'oauth_callback' => $callback_url));
-                                $helper->oauthConfirm($secpass,array('consumer_key' =>$consumer_key, 'token_key' => $token_key, 'oauth_callback' => $callback_url));
+                                #$helper->oauthConfirm($secpass,array('consumer_key' =>$consumer_key, 'token_key' => $token_key, 'oauth_callback' => $callback_url));
+                                #global $ID; $ID="OAUTHPLUGIN:".rawurlencode($secpass);
+                                global $PAGE; $PAGE="oauth";
+                                $handled=false; $event->data="oauthconfirm"; // XXX
+                                $event->preventDefault();
+                                #$event->result = true;
+                                #$event->stopPropagation();
                                 $user_notified=true;  // XXX
                                 break;
                             }
@@ -335,6 +340,21 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             #$event->result = true;
             #$event->data="show";
             exit(0);
+        }
+    }
+
+    function handle_act_output(&$event){
+        if ($event->data=='oauthconfirm') {
+            if (!($helper = &plugin_load('helper', 'oauth'))){
+                trigger_error('oauth plugin helper is not available.');
+                exit(0);
+                break;
+            }
+            $helper->oauthConfirm($secpass,array('consumer_key' =>$consumer_key, 'token_key' => $token_key, 'oauth_callback' => $callback_url));
+            #$event->result = true;
+            #$event->stopPropagation();
+            $event->preventDefault();
+            return true;
         }
     }
 

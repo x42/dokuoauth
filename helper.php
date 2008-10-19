@@ -69,7 +69,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
     /**
      *
      */
-    public function oauthConfirm($secpass, $opt) {
+    public function pageConfirm($secpass, $opt) {
         $this->printHeader();
         if(function_exists('html_msgarea')){
             html_msgarea();
@@ -82,7 +82,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
     /**
      *
      */
-    private function printConfirm($secpass, $opt) {
+    public function oauthConfirm($secpass, $opt) {
         global $lang;
         global $conf;
         global $auth;
