@@ -138,11 +138,21 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                     case 'addconsumer':
                         $this->_debug('ACT: addconsumer');
                         $handled=true;
-                        $consumer_key="robin";
-                        $consumer_sec="geheim";
-                        $consumer_cal="http://localhost/callbackdump.php";
-                        $consumer_cal=NULL;
-                        break; // TODO  -- 
+                        $consumer_key=$_REQUEST['consumer_key'];
+                        $consumer_sec=$_REQUEST['consumer_secret'];
+                        $consumer_cal=$_REQUEST['callback_uri'];
+                        if (empty($consumer_cal)) $consumer_cal=NULL;
+                        if (empty($consumer_key)) {
+                            ; // TODO error
+                            $this->_debug('addconsumer: empty consumer-key.');
+                            break; 
+                        }
+                        // TODO: check if it already exists !
+                        if ($doku_server->get_consumer_by_key($consumer_key)) {
+                            ; // TODO error
+                            $this->_debug('addconsumer: consumer already exists.');
+                            break;
+                        }
                         $doku_server->create_consumer($consumer_key, $consumer_sec, $consumer_cal);
                         $acllimit=array('suid' => '', 'users'=>NULL, 'timeout' => 0);
                         $doku_server->map_consumer($consumer_key, $acllimit);

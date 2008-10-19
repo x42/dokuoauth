@@ -82,7 +82,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
 
     function __construct($path = 'conf/oauth.gdbm') {/*{{{*/ /// XX DOKU_CONF 
         $this->dbh = dba_popen($path, 'c', 'inifile');
-# !!! TEST SETUP CODE
+# !!! TEST SETUP CODE XXX
         if ($this->lookup_consumer("robin")== NULL) {
             // insert test consumer key & consumer secret
             #$this->new_consumer("robin", "geheim");
@@ -93,7 +93,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
             #  consumer_robin=O:13:"OAuthConsumer":3:{s:3:"key";s:5:"robin";s:6:"secret";s:6:"geheim";s:12:"callback_url";N;}
             #  userC_robin=a:3:{s:4:"user";s:7:"rgareus";s:5:"token";s:5:"robin";s:6:"access";N;}
         }
-# !!! END TEST CODE
+# !!! END TEST CODE XXX
     }/*}}}*/
 
     function __destruct() {/*{{{*/
@@ -103,6 +103,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
     function new_usermap($userdata, $type='userC', $consumer_key, $token = NULL) {/*{{{*/
         $data = array('user' => $userdata, 'consumer' => $consumer_key, 'token' => $token, 'created' => time());
         if (empty($token)) $token=$consumer_key;
+        // TODO: check if already exist?!
         if (!dba_insert("${type}_$token", serialize($data), $this->dbh))
             throw new OAuthException("doooom!");
     }/*}}}*/
