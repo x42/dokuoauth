@@ -18,7 +18,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         ;
     }
 
-    # this is very much work in progress...
+    # THIS IS VERY MUCH WORK IN PROGRESS...
 
     // TODO:
     #  - general feedback page, error, info
@@ -58,32 +58,12 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
     function getMethods(){
         $result = array();
         $result[] = array(
-            'name'   => 'oauthLogon',
-            'desc'   => 'very similar to logon page',
-            'params' => array('secpass' => 'string', 'opt' => 'array'),
-            'return' => array('success' => 'boolen'),
-        );$result[] = array(
             'name'   => 'oauthConfirm',
             'desc'   => 'very similar to logon page',
             'params' => array('secpass' => 'string', 'opt' => 'array'),
             'return' => array('success' => 'boolen'),
         );
         return $result;
-    }
-
-
-    /**
-     *
-     */
-    public function oauthLogon($secpass, $opt) {
-        $this->printHeader();
-        if(function_exists('html_msgarea')){
-            html_msgarea();
-        }
-  //    include(template('main.php'));
-        $this->printForm($secpass, $opt);
-        $this->printFooter();
-        exit;
     }
 
     /**
@@ -102,77 +82,33 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
     /**
      *
      */
-    private function printForm($secpass, $opt) {
-        global $lang;
-        global $conf;
-    #   global $ID;
-        global $auth;
-
-        print '<h1>OAuth Login</h1>'.NL;
-        print '<h3>OAuth</h3>'.NL;
-        print '<div class="centeralign">'.NL;
-        $form = new Doku_Form('dw__oauth');
-        $form->startFieldset($lang['btn_login']);
-    #   $form->addHidden('id', $ID);
-        $form->addHidden('do[oauth]', 'resume');
-        $form->addHidden('dwoauthnonce', $secpass);
-        $form->addElement(form_makeTextField('u', $_REQUEST['u'], $lang['user'], 'focus__this', 'block'));
-        $form->addElement(form_makePasswordField('p', $lang['pass'], '', 'block'));
-    #   $form->addElement(form_makeCheckboxField('r', '1', $lang['remember'], 'remember__me', 'simple'));
-        $form->addElement(form_makeButton('submit', '', $lang['btn_login']));
-        $form->endFieldset();
-        html_form('login', $form);
-    }
-
-    /**
-     *
-     */
     private function printConfirm($secpass, $opt) {
         global $lang;
         global $conf;
-    #   global $ID;
         global $auth;
 
-        print '<h1>Confirm</h1>'.NL;
-        print '<h3>OAuth - Confirm</h3>'.NL;
-        // TODO: inform about username, consumer and token..
+        print '<h1>OAuth - Authorize Token</h1>'.NL;
         print '<div class="centeralign">'.NL;
         $form = new Doku_Form('dw__oauth');
-        $form->startFieldset($lang['btn_login']);
+        $form->startFieldset('Authorize Token');
     #   $form->addHidden('id', $ID);
-    #   $form->addHidden('do[oauth]', 'resume');
         $form->addHidden('dwoauthnonce', $secpass);
+        $form->addElement('<div class="leftalign"><ul>');
+        $form->addElement('<li>Consumer-Key:'.$opt['consumer_key'].'</li>');
+        $form->addElement('<li>Token-Key:'.$opt['token_key'].'</li>');
+        $form->addElement('<li>Callback URL:'.$opt['callback_url'].'</li>');
+        $form->addElement('</ul></div>');
         $form->addElement(form_makeCheckboxField('userconfirmed', '1', 'allow request', 'allow_this', 'simple'));
-        $form->addElement(form_makeCheckboxField('trustconsumer', '1', $lang['remember'], 'remember__me', 'simple'));
-        $form->addElement(form_makeButton('submit', 'oauth', 'resume'));
+        $form->addElement(form_makeCheckboxField('trustconsumer', '1', 'always trust this consumer from now on', 'remember__me', 'simple'));
+        $form->addElement(form_makeButton('submit', 'oauth', 'resume', array('title' => 'authorize')));
     #   $form->addElement(form_makeButton('submit', '', 'cancel'));
         $form->addElement(form_makeButton('submit', 'oauth', 'cancel'));
         $form->endFieldset();
 
-        // TODO: re-login button.. 
+        // TODO: change-user/re-login button.. (go to logout, keep special $ID='OAUTHPLUGIN:'.$secpass
         html_form('confirm', $form);
     }
-/*
-    private function printFormXXX($data, $options, $whatever = NULL) {
-        echo '<h3>Dokuwiki - oauth</h3>'."\n";
-        echo '<form name="dwoauth" method="post" accept-charset="utf-8" action="'.$data['baseurl'].'">'."\n";
-        echo '<fieldset style="width:85%; text-align:left;">'."\n";
-        echo '<p><label>Id:</label><br/><input name="id" id="i_id" size="60" value="'.$val.'"/>'; 
-        echo '</p>'."\n";
 
-        echo '<p><label>Edit Summary:</label><br/><input name="summary" size="60" value="created: '.htmlentities($data['title']).'"/></p>';
-        echo "\n";
-        echo '<p>';
-        # TODO: add oauth request params here
-        echo '<input type="hidden" name="style" value="nomenu"/>';
-        echo '<input class="button" type="submit" title="Go" value="authorize" name="do[oauth]"/>';
-        echo '&nbsp;|&nbsp;<button class="button" onclick="window.close()">Cancel</button>';
-        #echo '&nbsp;<a href="javascript:window.close()">Abort</a>';
-        echo '</p>'."\n";
-        echo '</fieldset>';
-        echo '</form>';
-    }
-*/
     /**
      *
      */

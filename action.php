@@ -140,7 +140,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $handled=true;
                         $consumer_key=$_REQUEST['consumer_key'];
                         $consumer_sec=$_REQUEST['consumer_secret'];
-                        $consumer_cal=$_REQUEST['callback_uri'];
+                        $consumer_cal=$_REQUEST['callback_url'];
                         if (empty($consumer_cal)) $consumer_cal=NULL;
                         if (empty($consumer_key)) {
                             ; // TODO error
@@ -276,7 +276,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                                     break;
                                 }
                                 $secpass=$doku_server->save_session(array('consumer_key' =>$consumer_key, 'token_key' => $token_key, 'oauth_callback' => $callback_url));
-                                $helper->oauthConfirm($secpass,2,3);
+                                $helper->oauthConfirm($secpass,array('consumer_key' =>$consumer_key, 'token_key' => $token_key, 'oauth_callback' => $callback_url));
                                 $user_notified=true;  // XXX
                                 break;
                             }
@@ -310,7 +310,8 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             # TODO: include xoauth parameters ?!
                             $this->redirect($callback_url, array('oauth_token'=>rawurlencode($token_key)));
                         } else  {
-                            $this->_debug("token-auth suceeded silently.");
+                            $this->_debug("token-auth suceeded.");
+                            echo ("request token $token_key authorized.");
                             #TODO: tell user to go back to consumer. $token is now authorized ..
                             exit(0);
                         }
