@@ -251,7 +251,12 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
                         if ($consumer=$doku_server->get_consumer_by_key($consumer_key)) {
                             $event->data="oauthcinfo";
-                            $this->_outargs=array('consumer_key' => $consumer->key, 'consumer_secret' => $consumer->secret, 'callback_url' => $consumer->callback_url);
+                            $this->_outargs=array('consumer_key' => $consumer->key, 'callback_url' => $consumer->callback_url);
+                            if (auth_ismanager()) { // XXX
+                                $this->_outargs['consumer_secret'] = $consumer->secret; 
+                            } else {
+                                $this->_outargs['consumer_secret'] = '&lt;<em>hidden</em>&gt;'; 
+                            }
                             if (!empty($secpass)) 
                                 $this->_outargs['secpass'] = $secpass;
                         } else {
