@@ -60,7 +60,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         $result[] = array(
             'name'   => 'oauthConfirm',
             'desc'   => 'very similar to logon page',
-            'params' => array('secpass' => 'string', 'opt' => 'array'),
+            'params' => array('opt' => 'array'),
             'return' => array('success' => 'boolen'),
         );
         return $result;
@@ -69,32 +69,23 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
     /**
      *
      */
-    public function pageConfirm($secpass, $opt) {
-        $this->printHeader();
-        if(function_exists('html_msgarea')){
-            html_msgarea();
-        }
-        $this->printConfirm($secpass, $opt);
-        $this->printFooter();
-        exit;
-    }
-
-    /**
-     *
-     */
-    public function oauthConfirm($secpass, $opt) {
+    public function oauthConfirm($opt) {
         global $lang;
         global $conf;
         global $auth;
 
         print '<h1>OAuth - Authorize Token</h1>'.NL;
+        print '<div class="leftalign">'.NL;
+        print '<p>A Consumer wants to make one or more requests on your behalf which requires your consent.<p>'.NL;
+        print '</div>'.NL;
         print '<div class="centeralign">'.NL;
         $form = new Doku_Form('dw__oauth');
-        $form->startFieldset('Authorize Token');
+        $form->startFieldset('Authorize Request Token');
     #   $form->addHidden('id', $ID);
-        $form->addHidden('dwoauthnonce', $secpass);
+        $form->addHidden('dwoauthnonce', $opt['secpass']);
         $form->addElement('<div class="leftalign"><ul>');
         $form->addElement('<li>Consumer-Key:'.$opt['consumer_key'].'</li>');
+        $form->addElement('<li><a href="?do[oauth]=cinfo&dwoauthnonce='.rawurlencode($opt['secpass']).'" alt="consumer info">Consumer Info</a></li>');
         $form->addElement('<li>Token-Key:'.$opt['token_key'].'</li>');
         $form->addElement('<li>Callback URL:'.$opt['callback_url'].'</li>');
         $form->addElement('</ul></div>');
@@ -105,38 +96,14 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         $form->addElement(form_makeButton('submit', 'oauth', 'cancel'));
         $form->endFieldset();
 
-        // TODO: change-user/re-login button.. (go to logout, keep special $ID='OAUTHPLUGIN:'.$secpass
+        // TODO: change-user/re-login button.. (go to logout, keep special $ID='OAUTHPLUGIN:'.$opt['secpass']
         html_form('confirm', $form);
-    }
-
-    /**
-     *
-     */
-    private function printFooter() { ?>
-</div>
-</body>
-</html>
-<?php 
-    }
-
-  /**
-   *  FIXME this should use the dokuwiki template
-   */
-    private function printHeader() {
-        global $conf;
-?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
- "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" >
-<head>
-<title>Dokuwiki OAuth</title>
-<link rel="stylesheet" media="all" type="text/css" href="<?php echo DOKU_BASE?>lib/exe/css.php?t=<?php echo $conf['template']?>" />
-<link rel="stylesheet" media="screen" type="text/css" href="<?php echo DOKU_BASE?>lib/exe/css.php?s=all&t=<?php echo $conf['template']?>" />
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<link rel="shortcut icon" href="<?php echo DOKU_TPL?>images/favicon.ico" />
-</head>
-<body>
-<div class="dokuwiki" style="border:0px;">
-<?php 
+        print '</div>'.NL;
+        print '<div class="leftalign">'.NL;
+        print '<p>At this stage of prototying the dokuwiki OAuth plugin we are not able to assure the Consumer’s true identity.</p>'.NL;
+        print '<p>The request token you are about to authorize is valid only once: to get an access-token, the latter can be used to perform (multiple) requests using your account until it expires or you revoke it.<br/>'.NL;
+        print 'A consumer may also forget the access-token and come back here every once in a while. Once consumer-verification is implemented and you have validated the consumer-information you may opt in to trust this consumer when you are logged in to dokuwiki to bypass this step by checking the "trust consumer" checkbox.</p>'.NL;
+        print '</div>'.NL;
     }
 
 }
