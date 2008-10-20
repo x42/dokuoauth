@@ -251,7 +251,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
                         if ($consumer=$doku_server->get_consumer_by_key($consumer_key)) {
                             $event->data="oauthcinfo";
-                            $this->_outargs=array(consumer => $consumer);
+                            $this->_outargs=array('consumer_key' => $consumer->key, 'consumer_secret' => $consumer->secret, 'callback_url' => $consumer->callback_url);
                             if (!empty($secpass)) 
                                 $this->_outargs['secpass'] = $secpass;
                         } else {
@@ -428,9 +428,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                 $handled=true;
                 break;
             case 'oauthcinfo':
-                print "not yet implemented.";
-                // TODO 
-                #$helper->oauthConsumer($this->_outargs);
+                $helper->oauthConsumerInfo($this->_outargs);
                 $handled=true;
                 break;
             case 'oauthconfirm':

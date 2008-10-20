@@ -59,7 +59,13 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         $result = array();
         $result[] = array(
             'name'   => 'oauthConfirm',
-            'desc'   => 'very similar to logon page',
+            'desc'   => 'ask user to authorize token',
+            'params' => array('opt' => 'array'),
+            'return' => array('success' => 'boolen'),
+        );
+        $result[] = array(
+            'name'   => 'oauthConsumerInfo',
+            'desc'   => 'show consumer info',
             'params' => array('opt' => 'array'),
             'return' => array('success' => 'boolen'),
         );
@@ -105,6 +111,41 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         print '<p>At this stage of prototying the dokuwiki OAuth plugin we are not able to assure the Consumer’s true identity.</p>'.NL;
         print '<p>The request token you are about to authorize is valid only once: to get an access-token, the latter can be used to perform (multiple) requests using your account until it expires or you revoke it.<br/>'.NL;
         print 'A consumer may also forget the access-token and come back here every once in a while. Once consumer-verification is implemented and you have validated the consumer-information you may opt in to trust this consumer when you are logged in to dokuwiki to bypass this step by checking the "trust consumer" checkbox.</p>'.NL;
+        print '</div>'.NL;
+    }
+
+    /**
+     *
+     */
+    public function oauthConsumerInfo($opt) {
+        global $lang;
+        global $conf;
+        global $auth;
+
+        print '<h1>OAuth - Consumer Info</h1>'.NL;
+        print '<div class="leftalign">'.NL;
+        print '</div>'.NL;
+        print '<div class="centeralign">'.NL;
+        $form = new Doku_Form('dw__oauth');
+        $form->startFieldset('Consumer Info');
+        if (!empty($opt['secpass']))
+            $form->addHidden('dwoauthnonce', $opt['secpass']);
+        $form->addElement('<div class="leftalign"><ul>');
+        $form->addElement('<li>Consumer-Key:'.$opt['consumer_key'].'</li>');
+        $form->addElement('<li>Consumer-secret:'.$opt['consumer_secret'].'</li>');
+        $form->addElement('<li>Callback URL:'.$opt['callback_url'].'</li>');
+        $form->addElement('</ul></div>');
+        if (!empty($opt['secpass'])) {
+            $form->addElement(form_makeButton('submit', 'oauth', 'resume', array('title' => 'authorize')));
+            $form->addElement(form_makeButton('submit', 'oauth', 'cancel'));
+        } else {
+            $form->addHidden('consumer_key', $opt['consumer_key']); 
+            $form->addElement(form_makeButton('submit', 'oauth', 'cinfo')); // XXX
+        }
+        $form->endFieldset();
+
+        // TODO: change-user/re-login button.. (go to logout, keep special $ID='OAUTHPLUGIN:'.$opt['secpass']
+        html_form('info', $form);
         print '</div>'.NL;
     }
 
