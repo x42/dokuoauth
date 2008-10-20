@@ -82,18 +82,6 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
 
     function __construct($path = 'conf/oauth.gdbm') {/*{{{*/ /// XX DOKU_CONF 
         $this->dbh = dba_popen($path, 'c', 'inifile');
-# !!! TEST SETUP CODE XXX
-#       if ($this->lookup_consumer("robin")== NULL) {
-#           // insert test consumer key & consumer secret
-#           #$this->new_consumer("robin", "geheim");
-#           $this->new_consumer("robin", "geheim", "http://localhost/callbackdump.php");
-#           // map_consumer:
-#           $this->new_usermap(array('suid' => '', 'users'=>NULL, 'timeout' => 0), 'userC', "robin");
-#           # in INI-format:
-#           #  consumer_robin=O:13:"OAuthConsumer":3:{s:3:"key";s:5:"robin";s:6:"secret";s:6:"geheim";s:12:"callback_url";N;}
-#           #  userC_robin=a:3:{s:4:"user";s:7:"rgareus";s:5:"token";s:5:"robin";s:6:"access";N;}
-#       }
-# !!! END TEST CODE XXX
     }/*}}}*/
 
     function __destruct() {/*{{{*/
