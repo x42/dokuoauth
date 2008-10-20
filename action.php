@@ -253,7 +253,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             #$event->data="oautherror";
                             #$this->_outargs['errormessage'] = 'can not resume this session.';
                             #break;
-                            trigger_error('can not resume this session.'); 
+                            trigger_error('Invalid token. Can not resume this session. Try hitting your browser\'s "back" button.'); 
                             exit(0);
                         }
                         $consumer_key=$ses['consumer_key'];

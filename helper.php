@@ -82,6 +82,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         $form = new Doku_Form('dw__oauth');
         $form->startFieldset('Authorize Request Token');
     #   $form->addHidden('id', $ID);
+        $form->addElement('<p>Your Username: '.$_SERVER['REMOTE_USER'].'</p>');
         $form->addHidden('dwoauthnonce', $opt['secpass']);
         $form->addElement('<div class="leftalign"><ul>');
         $form->addElement('<li>Consumer-Key:'.$opt['consumer_key'].'</li>');
@@ -100,6 +101,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         html_form('confirm', $form);
         print '</div>'.NL;
         print '<div class="leftalign">'.NL;
+        print '<p><b>small print</b></p>'.NL;
         print '<p>At this stage of prototying the dokuwiki OAuth plugin we are not able to assure the Consumer’s true identity.</p>'.NL;
         print '<p>The request token you are about to authorize is valid only once: to get an access-token, the latter can be used to perform (multiple) requests using your account until it expires or you revoke it.<br/>'.NL;
         print 'A consumer may also forget the access-token and come back here every once in a while. Once consumer-verification is implemented and you have validated the consumer-information you may opt in to trust this consumer when you are logged in to dokuwiki to bypass this step by checking the "trust consumer" checkbox.</p>'.NL;
