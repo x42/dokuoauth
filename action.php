@@ -110,8 +110,8 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
         // LOGIN PAGE WORKAROUND XXX
         global $ID; 
-        if ($event->data=='login' && !strncasecmp($ID,"OAUTHPLUGIN:",12)) {
-            $dwoauthnonce=rawurldecode(substr($ID,12));
+        if ($event->data=='login' && !strncasecmp($ID,"OAUTHPLUGINNONCE:",17)) {
+            $dwoauthnonce=rawurldecode(substr($ID,17));
             unset($event->data);
             $event->data=array();
             $event->data['oauth']='resume';
@@ -309,7 +309,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         if (empty($user)) {
                             $secpass=$doku_server->save_session(array('consumer_key' =>$consumer_key, 'token_key' => $token_key, 'oauth_callback' => $callback_url));
                             // LOGIN PAGE WORKAROUND XXX
-                            global $ID; $ID="OAUTHPLUGIN:".rawurlencode($secpass);
+                            global $ID; $ID="OAUTHPLUGINNONCE:".rawurlencode($secpass);
                             $finished=false; $handled=true; $event->data="login";
                             $this->_debug('dropping to login..');
                             return; /// don't $event->preventDefault(); 'login' is the default ;)
