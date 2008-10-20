@@ -1,7 +1,9 @@
 see http://mir.dnsalias.com/wiki/dokuoauth
 
-oAuth tokens and keys are stored in DOKU_CONF.'oauth.inidb' in .ini db file format.
-this is work in progres..
+oAuth-tokens and keys are stored in DOKU_CONF.'oauth.inidb' in .ini db file format.
+
+Much or this plugin is work in progress - DON'T USE FOR PRODUCTION.
+
 
 The dokuoauth plugin requires a small patch to dokuwiki intoducing a 
 new Event-Hook: ACTION_ON_AUTH
@@ -22,3 +24,8 @@ new Event-Hook: ACTION_ON_AUTH
 +        unset($evt);
        }
      }
+---
+
+OAuth.php and OAuth_DokuServer.php are based on http://oauth.googlecode.com/svn/code/php/
+by Andy Smith under MIT license. -  This dokuwiki plugin is distrubuted in terms of the GPL.
+
