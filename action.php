@@ -145,7 +145,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         break;
 
                     case 'debug':
-                        #die('you are not debugging.'); # XXX
+                        die('you are not debugging.'); # XXX
                         $finished=true; 
                         print_r($doku_server->list_consumers()); # XXX - shows secrets of the consumer !
                         print "<br/>\n";
