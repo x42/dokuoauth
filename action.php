@@ -144,6 +144,22 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $event->data="oauthcancel";
                         break;
 
+                    case 'debug':
+                        #die('you are not debugging.'); # XXX
+                        $finished=true; 
+                        print_r($doku_server->list_consumers()); # XXX - shows secrets of the consumer !
+                        print "<br/>\n";
+                        print "<br/>\n";
+                        print_r($doku_server->list_usertokens($_SERVER['REMOTE_USER']));
+                        print "<br/>\n";
+                        print "<br/>\n";
+                        foreach($doku_server->list_usertokens('') as $token) { # XXX lists ALL tokens
+                            print 'token for user :'.$token['user'].' - ';
+                            print_r($doku_server->get_token_by_key($token['consumer_key'], $token['token_key'])); # XXX - shows token secrets
+                            print "<br/>\n";
+                        }
+                        break;
+
                     case 'addconsumer':
                         $this->_debug('ACT: addconsumer');
                         $handled=true;

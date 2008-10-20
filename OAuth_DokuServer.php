@@ -15,7 +15,6 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         return TRUE;
     }/*}}}*/
 
-
     public function map_user($user, $consumer_key, $token) {/*{{{*/
         if (empty($user) || is_array($user)) return FALSE; 
         if (empty($consumer_key)) return FALSE; 
@@ -24,13 +23,42 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         return TRUE;
     }/*}}}*/
 
+    public function unmap_user($token) {/*{{{*/
+        if (empty($user) || is_array($user)) return FALSE; 
+        if (empty($token)) return FALSE; 
+        // TODO lookup, check if exists?! -> return FALSE.
+        $this->data_store->del_usermap('userT', $token);
+        // TODO delete token!
+        return TRUE;
+    }/*}}}*/
+
+    public function list_consumers() {/*{{{*/
+        return ($this->data_store->all_consumers());
+    }/*}}}*/
+
+    public function list_usertokens($username) {/*{{{*/
+        return ($this->data_store->list_tokens($username));
+    }/*}}}*/
+
     public function get_consumer_acl($consumer_key) {/*{{{*/
         return ($this->data_store->lookup_consumeracl($consumer_key));
+    }/*}}}*/
+
+    public function get_token_by_key($consumer_key, $token_key) {/*{{{*/
+        if  (NULL !=($rv=$this->data_store->lookup_token($consumer_key, 'access', $token_key))) {
+            return (array('type'=>'access', 'obj' => $rv));
+        }
+        if  (NULL != ($rv=$this->data_store->lookup_token($consumer_key, 'request', $token_key))) {
+            return (array('type'=>'request', 'obj' => $rv));
+        }
+        return (NULL);
     }/*}}}*/
 
     public function get_consumer_by_key($consumer_key) {/*{{{*/
         return ($this->data_store->lookup_consumer($consumer_key));
     }/*}}}*/
+
+    // TODO: delete consumer.. and settings
 
     public function map_requesttoken($consumer_key, $token) {/*{{{*/
         $this->data_store->new_usermap($consumer_key, 'userX', '!CONSUMER-KEY!', $token);
@@ -158,6 +186,46 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         return $consumer;
     }/*}}}*/
 
+    function all_consumers() {/*{{{*/
+        $key=dba_firstkey($this->dbh);
+        $found=array();
+        $consumers=array();
+        while ($key != false) {
+            if (!strncmp($key,"consumer_",9) )
+                $found[] = $key;
+            $key = dba_nextkey($this->dbh);
+        }
+        foreach ($found as $consumer) {
+            $rv = dba_fetch($consumer, $this->dbh);
+            if ($rv === FALSE) continue;
+            $obj = unserialize($rv);
+            if (!($obj instanceof OAuthConsumer)) continue;
+            $consumers[]=$obj;
+        }
+        return $consumers;
+    }/*}}}*/
+
+    function list_tokens($username = '') {/*{{{*/
+        $key=dba_firstkey($this->dbh);
+        $tokens=array();
+        $usertokens=array();
+        while ($key != false) {
+            if (!strncmp($key,"userT_",6))
+                $tokens[] = $key;
+            $key = dba_nextkey($this->dbh);
+        }
+        foreach ($tokens as $token) {
+            $rv = dba_fetch($token, $this->dbh);
+            if ($rv === FALSE) continue;
+            $data = unserialize($rv);
+            if ('userT_'.$data['token'] != $token) continue;
+            if (!empty($username) && $data['user'] != $username) continue;
+            $usertokens[]=array('consumer_key' => $data['consumer'], 'token_key' => $data['token'], 'user' => $data['user']); 
+            // TODO: get_token_by_key() ; lookup_token..() for object/secret
+        }
+        return $usertokens;
+    }/*}}}*/
+
     function lookup_consumer($consumer_key) {/*{{{*/
         $rv = dba_fetch("consumer_$consumer_key", $this->dbh);
         if ($rv === FALSE) {
@@ -187,10 +255,16 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         $now=time();
         $handle_later = array();
         while ($key != false) {
-        # and clean up old-ones  -> oauth_timestamp ;; OAuthServer->timestamp_threshold (300 sec)
+        # clean up old-NONCEs -> oauth_timestamp ;; OAuthServer->timestamp_threshold (300 sec)
         # give it some extra hour(s) eg. server changes time-zones...
             if (!strncmp($key,"nonce_",6) && dba_fetch($key, $this->dbh) + 3900 < $now) 
                 $handle_later[] = $key;
+        # same for old session-tokens.
+            if (!strncmp($key,"session_",8) && $rv=dba_fetch($key, $this->dbh)) {
+                $data=unserialize($rv);
+                if ($data['created'] + 3900 < $now) 
+                    $handle_later[] = $key;
+            }
             $key = dba_nextkey($this->dbh);
         }
         foreach ($handle_later as $key) {
