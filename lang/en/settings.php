@@ -6,7 +6,7 @@
  */
 $lang['enable']            = 'en/disable authentication of OAuth-signed requests.';
 $lang['manager_admin']     = 'allow managers to administrate ALL oauth-tokens';
-$lang['custom_base_url']   = 'set custom end-point base-url (leave blank for default/autodetection)';
+#$lang['custom_base_url']   = 'set custom end-point base-url (leave blank for default/autodetection)';
 $lang['log_all_requests']  = 'OAuth Request Logging (violates the privacy of users and is not recommended)';
 $lang['trace_plugin']      = 'Debug Log (trace oAuth plugin)';
 $lang['disclose_access_token_secret'] = 'Show access-token secrets in oauth-admin.';

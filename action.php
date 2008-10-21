@@ -273,6 +273,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             #    $rqmap=array('Consumer-Key' => $doku_server->get_consumer_by_requesttoken($token));
                             #}
                             $secret=$ti['obj']->secret;
+                            # TODO: disclose it to admin's anyway ?! only auth_admin()'s ?
                             if ($ti['type']=='access' && !$this->getConf('disclose_access_token_secret'))
                                 $secret = '&lt;<em>hidden</em>&gt;'; 
                             $this->_outargs[]=array(

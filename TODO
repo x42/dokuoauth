@@ -1,0 +1,16 @@
+see also /TODO/ and /XXX/ in php source comments.
+
+ * implement access-token expiry
+ * token disable/enable (w/o delete)
+ * consumer admin (whitelist, un-auto-trust, auto-suid, etc.)
+ * ACL user/group limitations, max ACL level ?!
+ * auto-delete expired request-tokens
+ * plugin configuration settings
+ * email notification
+ * oauth-discovery server (later client)
+ * optimize code, and flow.
+ * re-login page.
+ * require HTTPS for secret-exchange ?!
+ * max requests per consumer and per IP 
+   BEFORE checking signature 
+   (prevent DOS and Resource Exhaustion)
