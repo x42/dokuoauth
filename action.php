@@ -192,16 +192,30 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         // map to $this->_outargs; include links to cinfo, strip secrets unless auth_ismanager()
                         foreach ($consumers as $c) {
                             $acllimit = $doku_server->get_consumer_acl($c->key);
-                            unset($acllimit);
-                            // TODO if not is_admin() .. remove /secret/ information
+                            $secret = $c->secret;
+                            if (!auth_isadmin() && !($this->getConf('manager_admin') && auth_ismanager())) { 
+                                if (!is_array($acllimit) 
+                                    || $acllimit['owner'] != $_SERVER['REMOTE_USER'] 
+                                    || empty($_SERVER['REMOTE_USER'])) {
+                                    $secret = '&lt;<em>hidden</em>&gt;'; 
+                                    unset($acllimit);
+                                }
+                            }
+                            // check add auto-trust
+                            $actions = array('delconsumer&consumer_key=' => 'Delete', 'cinfo&consumer_key=' => 'Inspect');
+                            if ($this->check_consumer_confirm($doku_server, $_SERVER['REMOTE_USER'], $c->key)) {
+                                $actions['rmtrust&&consumer_key='] = 'remove trust';
+                            }
                             $this->_outargs[]=array(
                                 'key' => $c->key,
                                 'user' => '-', # SUID ?
                                 'type' => 'consumer',
-                                'secret' => $c->secret,
+                                'secret' => $secret,
                                 'acllimit' => $acllimit,
-                                'action' => array( 'delconsumer&consumer_key=' => 'Delete', 'cinfo&consumer_key=' => 'Inspect')
+                                'action' => $actions
                             );
+
+                            
                         }
                         break;
 
@@ -362,10 +376,28 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $event->data="oauthinfo";
                         break;
 
+                    case 'rmtrust':
+                        $consumer_key=$_REQUEST['consumer_key'];
+                        $doit=true;
+                        # continue to cinfo
+                        if (empty($consumer_key)) {
+                            $doit=false;
+                            msg("empty consumer key.",-1);
+                        }
+                        if (!$this->check_consumer_confirm($doku_server, $_SERVER['REMOTE_USER'], $consumer_key)) {
+                            $doit=false;
+                            msg("YOU are not trusting this consumer, and thus can not remove the trust.",-1);
+                        }
+                        if ($doit) {
+                            $cs=$doku_server->get_consumer_settings($consumer_key); 
+                            $cs['trusted']=array_unique(array_diff($cs['trusted'],array($_SERVER['REMOTE_USER'])));
+                            $doku_server->set_consumer_settings($consumer_key,$cs); 
+                            msg("removed trust in consumer: $consumer_key");
+                        }
+
                     case 'cinfo': // show consumer info (optionally back to authorize-token)
                         $handled=true; 
                         $secpass=NULL;
-                        $consumer_key='';
                         if (!empty($dwoauthnonce)) {
                             $ses=$doku_server->load_session($dwoauthnonce);
                             if (is_array($ses)) {
@@ -374,6 +406,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             } else {
                                 // ignore (reload) ? XXX
                                 $this->_debug('consumer info: empty session');
+                                $consumer_key='';
                             }
                         }
                         if (empty($consumer_key))
@@ -389,11 +422,17 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $event->data="oauthcinfo";
                             $this->_outargs=array('consumer_key' => $consumer->key, 'callback_url' => $consumer->callback_url);
                             $this->_outargs['acllimit'] = $doku_server->get_consumer_acl($consumer->key);
-                            // TODO if not is_admin() .. remove /secret/ information from acllimit ?!
-                            if (auth_isadmin() || ($this->getConf('manager_admin') && auth_ismanager())) { // XXX
+                            if (auth_isadmin() || ($this->getConf('manager_admin') && auth_ismanager())) { 
                                 $this->_outargs['consumer_secret'] = $consumer->secret; 
+                                $this->_outargs['acllimit']['settings'] = $doku_server->get_consumer_settings($consumer->key); // XXX 
+
                             } else {
                                 $this->_outargs['consumer_secret'] = '&lt;<em>hidden</em>&gt;'; 
+                                unset($this->_outargs['acllimit']);
+                            }
+                            if ($this->check_consumer_confirm($doku_server, $_SERVER['REMOTE_USER'], $consumer_key)) {
+                                #$this->_outargs['action']['rmtrust&&consumer_key='] = 'remove trust'; // TODO - form checkbox or button
+                                $this->_outargs['acllimit']['trusted'] = 'yes';
                             }
                             if (!empty($secpass)) 
                                 $this->_outargs['secpass'] = $secpass;
@@ -647,11 +686,12 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         return $user;
     }/*}}}*/
 
-    private function check_consumer_confirm($doku_server, $user, $consumer_key, $request_token) {/*{{{*/
+    private function check_consumer_confirm($doku_server, $user, $consumer_key, $request_token = NULL) {/*{{{*/
         $acllimit = $doku_server->get_consumer_acl($consumer_key);
         if (is_array($acllimit) && !empty($acllimit['suid'])) return true;
 
         // check database ... for user <> consumer  user-whitelist (auto-confirm)
+        if (empty($user)) return false;
         $cs=$doku_server->get_consumer_settings($consumer_key); 
         if (!is_array($cs['trusted']) || !in_array($user, $cs['trusted'])) return false;
 
