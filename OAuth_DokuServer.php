@@ -8,6 +8,12 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         return $this->data_store->new_consumer($consumer_key, $consumer_secret, $callback_url);
     }/*}}}*/
 
+    public function delete_consumer($consumer_key) {/*{{{*/
+        $this->data_store->del_consumer($consumer_key);
+        $this->data_store->del_usermap('userC', $consumer_key);
+        return TRUE;
+    }/*}}}*/
+
     public function map_consumer($consumer_key, $acllimit) {/*{{{*/
         if (empty($consumer_key)) return FALSE; 
         if (!is_array($acllimit)) return FALSE; 
@@ -30,12 +36,6 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         $this->data_store->del_usermap('userX', $token);
         $this->data_store->del_usermap('request', $token);
         $this->data_store->del_usermap('access', $token);
-        return TRUE;
-    }/*}}}*/
-
-    public function delete_consumer($consumer_key) {/*{{{*/
-        $this->data_store->del_consumer($consumer_key);
-        $this->data_store->del_usermap('userC', $consumer_key);
         return TRUE;
     }/*}}}*/
 
@@ -64,8 +64,6 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
     public function get_consumer_by_key($consumer_key) {/*{{{*/
         return ($this->data_store->lookup_consumer($consumer_key));
     }/*}}}*/
-
-    // TODO: delete consumer.. and settings
 
     public function map_requesttoken($consumer_key, $token) {/*{{{*/
         $this->data_store->new_usermap($consumer_key, 'userX', '!CONSUMER-KEY!', $token);

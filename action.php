@@ -169,6 +169,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         // map to $this->_outargs; include links to cinfo, strip secrets unless is_manager()
                         foreach ($consumers as $c) {
                             // TODO get settings / ACL limits ?
+                            $acllimit = $doku_server->get_consumer_acl($c->key);
                             $this->_outargs[]=array(
                                 'key' => $c->key,
                                 'user' => '-', # SUID ?
@@ -209,7 +210,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         break;
 
                     case 'debug':
-                        #die('you are not debugging.'); # XXX
+                        die('you are not debugging.'); # XXX
                         $finished=true; 
                         print_r($doku_server->list_consumers()); # XXX - shows secrets of the consumer !
                         print "<br/>\n";
@@ -253,8 +254,9 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         }
                         // TODO  check ACL is_admin(), allow to create suid tokens, ...
                         $doku_server->create_consumer($consumer_key, $consumer_sec, $consumer_cal);
-                        $acllimit=array('suid' => '', 'users'=>NULL, 'timeout' => 0);
+                        $acllimit=array('suid' => '', 'users'=>NULL, 'timeout' => 0, 'owner' => $_SERVER['REMOTE_USER']);
                         $doku_server->map_consumer($consumer_key, $acllimit);
+
                         if ($_REQUEST['feedback']) {
                             $finished=false;
                             $event->data="oautherror"; // TODO go back to add-form.
