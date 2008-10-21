@@ -64,6 +64,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                 print($e->getMessage() . "\n<hr />\n");
                 print_r($req);
                 $this->_debug("oauth error:\n".$e->getMessage()."\n".print_r($req, true));
+                $this->_log("oauth error:\n".$e->getMessage()."\n".print_r($req, true));
                 die();
             }
 
@@ -76,10 +77,14 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             global $auth;
             $USERINFO = $auth->getUserData($user);
             if (!is_array($USERINFO)) {
-                $_SERVER['REMOTE_USER'] = "";
+                $_SERVER['REMOTE_USER'] = ""; // after _log() ?
                 $this->_debug('oAuth: could not find user: '.$user);
+                $this->_log("user '$user' not found.");
             } 
-            else $this->_debug('oAuth: set-user: '.$user);
+            else { 
+                $this->_debug('oAuth: set-user: '.$user);
+                $this->_log("granted access.");
+            }
         }
     }
 
@@ -119,8 +124,11 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         }
         // END LOGIN PAGE WORKAROUND XXX
 
-        if (!empty($event->data['oauth'])) {
-            // interactive oAuth - admin
+        if (trim($event->data) == 'oauth') {
+            $handled=true;
+            $event->data="oauthinfo";
+        }
+        else if (!empty($event->data['oauth'])) {
             require_once("dokuoauth.php");
             try {
                 switch (trim($event->data['oauth'])) {
@@ -144,8 +152,64 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $event->data="oauthcancel";
                         break;
 
+                    case 'delconsumer':
+                        die("not yet implemented");
+                        # TODO: check permissions.
+                        $consumer_key=$_REQUEST['consumer_key'];
+                        $this->_debug("remove Consumer: $consumer_key");
+                        $doku_server->delete_consumer($consumer_key);
+                        msg("removed Consumer: $consumer_key");
+                      # break;
+
+                    case 'clist':
+                        $handled=true; 
+                        $event->data="oauthlist";
+                        $this->_outargs=array();
+                        $consumers=$doku_server->list_consumers();
+                        // map to $this->_outargs; include links to cinfo, strip secrets unless is_manager()
+                        foreach ($consumers as $c) {
+                            // TODO get settings / ACL limits ?
+                            $this->_outargs[]=array(
+                                'key' => $c->key,
+                                'user' => '-', # SUID ?
+                                'type' => 'consumer',
+                                'secret' => $c->secret,
+                                'action' => 'delconsumer&consumer_key=', # XXX array?, text
+                            );
+                        }
+                        break;
+
+                    case 'deltoken':
+                        die("not yet implemented");
+                        # TODO: check access rights.
+                        # see if token belogs to user.
+                        # or to _any_ user.
+                        $token=$_REQUEST['token_key'];
+                        $this->_debug("remove Token: $token");
+                        $doku_server->unmap_user($token);
+                        msg("removed token: $token");
+                    #   break;
+
+                    case 'tlist':
+                        $handled=true; 
+                        $event->data="oauthlist";
+                        $userfilter=""; //$_SERVER['REMOTE_USER']; # XXX
+                        $this->_outargs=array();
+                        foreach($doku_server->list_usertokens($userfilter) as $token) {
+                        // TODO lookup userX mappings?
+                            $ti=$doku_server->get_token_by_key($token['consumer_key'], $token['token_key']); 
+                            $this->_outargs[]=array(
+                                'user' => $token['user'], 
+                                'type' => $ti['type'],
+                                'action' => 'deltoken&token_key=', # XXX array?
+                                'key' => $ti['obj']->key,
+                                'secret' => $ti['obj']->secret # XXX
+                            );
+                        }
+                        break;
+
                     case 'debug':
-                        die('you are not debugging.'); # XXX
+                        #die('you are not debugging.'); # XXX
                         $finished=true; 
                         print_r($doku_server->list_consumers()); # XXX - shows secrets of the consumer !
                         print "<br/>\n";
@@ -168,9 +232,9 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $consumer_cal=$_REQUEST['callback_url'];
                         if (empty($consumer_cal)) $consumer_cal=NULL;
                         if (empty($consumer_key)) {
-                            $event->data="oautherror"; // TODO - use add-consumer form
+                            $event->data="oauthaddconsumer"; 
                             $this->_debug('addconsumer: empty consumer-key.'); 
-                            $this->_outargs=array('consumer_key' => '', 'consumer_secret' => $consumer_sec, 'callback_url' => $callback_url);
+                            $this->_outargs=array('consumer_key' => '', 'consumer_secret' => $consumer_sec, 'callback_url' => $consumer_cal);
                             $this->_outargs['errormessage'] = 'addconsumer: empty consumer key.';
                             break; 
                         }
@@ -178,6 +242,12 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
                         if ($doku_server->get_consumer_by_key($consumer_key)) {
                             ; // TODO: error or ignore ?
+                            if ($_REQUEST['feedback']) {
+                                $finished=false;
+                                msg('consumer add: A consumer with this key already exists.', -1);
+                                $this->_outargs=array('consumer_key' => '', 'consumer_secret' => $consumer_sec, 'callback_url' => $consumer_cal);
+                                $event->data="oauthaddconsumer"; 
+                            }
                             $this->_debug('addconsumer: consumer already exists.');
                             break;
                         }
@@ -185,6 +255,11 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $doku_server->create_consumer($consumer_key, $consumer_sec, $consumer_cal);
                         $acllimit=array('suid' => '', 'users'=>NULL, 'timeout' => 0);
                         $doku_server->map_consumer($consumer_key, $acllimit);
+                        if ($_REQUEST['feedback']) {
+                            $finished=false;
+                            $event->data="oautherror"; // TODO go back to add-form.
+                            $this->_outargs['errormessage'] = 'scratch that error. Consumer '.$consumer_key.' was added suceccfully.';
+                        }
                         break;
 
                     case 'accesstoken': // exchange [authorized] request-token for an access-token.
@@ -226,6 +301,11 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         print $token;
                         break;
 
+                    case 'info':
+                        $handled=true; 
+                        $event->data="oauthinfo";
+                        break;
+
                     case 'cinfo': // show consumer info (optionally back to authorize-token)
                         $handled=true; 
                         $secpass=NULL;
@@ -251,6 +331,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
                         if ($consumer=$doku_server->get_consumer_by_key($consumer_key)) {
                             $event->data="oauthcinfo";
+                            // TODO get settings / ACL limits.
                             $this->_outargs=array('consumer_key' => $consumer->key, 'callback_url' => $consumer->callback_url);
                             if (auth_ismanager()) { // XXX
                                 $this->_outargs['consumer_secret'] = $consumer->secret; 
@@ -392,6 +473,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                 print($e->getMessage() . "\n<hr />\n");
                 print_r($req);
                 $this->_debug("oauth error:\n".$e->getMessage()."\n".print_r($req, true));
+                $this->_log("oauth error:\n".$e->getMessage()."\n".print_r($req, true));
                 die();
             }
         }
@@ -412,7 +494,12 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
     function handle_act_output(&$event){
         $handled=false;
         $this->_debug('output event: '.print_r($event, true));
-        if (!in_array(trim($event->data), array('oauthconfirm', 'oautherror', 'oauthcancel', 'oauthcinfo'))) {
+        if (!in_array(trim($event->data), array(
+                'oauthconfirm', 'oautherror',
+                'oauthcancel', 'oauthcinfo',
+                'oauthinfo', 'oauth', 'oauthlist',
+                'oauthaddconsumer'
+           ))) {
             return false;
         }
 
@@ -424,12 +511,18 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         switch (trim($event->data)) {
             case 'oautherror':
                 // TODO 
+                $helper->oauthToolbar();
                 #$helper->oauthError($this->_outargs);
                 print('<p><b>Oauth Error:</b>&nbsp;'.$this->_outargs['errormessage'].'</p>');
                 $handled=true;
                 break;
             case 'oauthcancel':
                 print('<p>Oauth Transaction Cancelled. I don\'t know what to do next. Have nice day.</p><p> truly yours,<br/> OAuth plugin</p>');
+                $handled=true;
+                break;
+            case 'oauth':
+            case 'oauthinfo':
+                $helper->oauthInfo();
                 $handled=true;
                 break;
             case 'oauthcinfo':
@@ -441,6 +534,14 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                     $helper->oauthConfirm($this->_outargs);
                     $handled=true;
                 }
+                break;
+            case 'oauthaddconsumer':
+                $helper->oauthAddConsumer($this->_outargs);
+                $handled=true;
+                break;
+            case 'oauthlist':
+                $helper->oauthTokenList($this->_outargs);
+                $handled=true;
                 break;
             default:
                 break;
@@ -526,18 +627,52 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
     } /*}}}*/
 
     /*{{{*/
-    private function _debug ($m = null){
-        $PSdebug= true; //XXX
-        $PSlogfile= '/tmp/oAuth.debug';
-        if (! isset($PSdebug) || $PSdebug === false) return;
-
-        if (! is_writable(dirname($PSlogfile)) &! is_writable($PSlogfile)){
+    private function _log ($m = null){
+        $OAlog= false; //XXX
+        $OAlogdb= '/tmp/oAuth.log';
+        $dbh = dba_popen($OAlogfile, 'c', 'inifile');
+        if (! isset($OAlog) || $OAlog === false) return;
+        $data = array (
+            'REMOTE_USER'           => $_SERVER['REMOTE_USER'],
+            'HTTP_USER_AGENT'       => $_SERVER['HTTP_USER_AGENT'],
+            'REMOTE_ADDR'           => $_SERVER['REMOTE_ADDR'],
+            'REMOTE_PORT'           => $_SERVER['REMOTE_PORT'],
+            'HTTP_X_REAL_IP'        => $_SERVER['HTTP_X_REAL_IP'],
+            'HTTP_X_FORWARDED_FOR'  => $_SERVER['HTTP_X_FORWARDED_FOR'],
+            'HTTP_COOKIE'           => $_SERVER['HTTP_COOKIE'],
+            'REQUEST_METHOD'        => $_SERVER['REQUEST_METHOD'],
+            'REQUEST_URI'           => $_SERVER['REQUEST_URI'],
+            'QUERY_STRING'          => $_SERVER['QUERY_STRING'],
+            'REQUEST_TIME'          => $_SERVER['REQUEST_TIME'],
+            'GET'       => $_GET,
+            'POST'      => $_POST,
+            'REQUEST'   => $_REQUEST,
+            'msg'       => $m
+        );
+        if (!$dbh ||
+            !dba_insert("log_$token", serialize($data), $dbh)) {
             header("HTTP/1.1 500 Internal Server Error");
-            echo 'Cannot write to debug log: ' . $PSlogfile;
+            echo 'Cannot write to log: ' . $OAlogdb;
+            return;
+        }
+        dba_close($this->dbh);
+    } 
+    /*}}}*/
+
+
+    /*{{{*/
+    private function _debug ($m = null){
+        $OAdebug= true; //XXX
+        $OAlogfile= '/tmp/oAuth.debug';
+        if (! isset($OAdebug) || $OAdebug === false) return;
+
+        if (! is_writable(dirname($OAlogfile)) &! is_writable($OAlogfile)){
+            header("HTTP/1.1 500 Internal Server Error");
+            echo 'Cannot write to debug log: ' . $OAlogfile;
             return;
         }
         $vhost=DOKU_URL;
-        error_log($vhost.' '.date("c ").$m."\n", 3, $PSlogfile);
+        error_log($vhost.' '.date("c ").$m."\n", 3, $OAlogfile);
     } 
     /*}}}*/
 

@@ -24,11 +24,18 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
     }/*}}}*/
 
     public function unmap_user($token) {/*{{{*/
-        if (empty($user) || is_array($user)) return FALSE; 
         if (empty($token)) return FALSE; 
         // TODO lookup, check if exists?! -> return FALSE.
         $this->data_store->del_usermap('userT', $token);
-        // TODO delete token!
+        $this->data_store->del_usermap('userX', $token);
+        $this->data_store->del_usermap('request', $token);
+        $this->data_store->del_usermap('access', $token);
+        return TRUE;
+    }/*}}}*/
+
+    public function delete_consumer($consumer_key) {/*{{{*/
+        $this->data_store->del_consumer($consumer_key);
+        $this->data_store->del_usermap('userC', $consumer_key);
         return TRUE;
     }/*}}}*/
 
@@ -126,6 +133,11 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
 
     function del_usermap($type='userT', $token) {/*{{{*/
         dba_delete("${type}_$token", $this->dbh);
+    }/*}}}*/
+
+    function del_consumer($consumer_key) {/*{{{*/
+        dba_delete("consumer_$consumer_key", $this->dbh);
+        dba_delete("settings_$consumer_key", $this->dbh);
     }/*}}}*/
 
     function set_consettings($key, $data) {/*{{{*/
@@ -309,7 +321,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         }
         $actok = $this->new_token($consumer, 'access');
         dba_delete("request_" . $token->key, $this->dbh);
-        $this->del_usermap('userX', $token->key); // deletes request-token/consumer link
+        $this->del_usermap('userX', $token->key); // delete request-token/consumer link
         $this->del_usermap('userT', $token->key);
         $this->new_usermap($user, 'userT', $consumer->key, $actok->key);
         return $actok;
