@@ -160,7 +160,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $doit=false;
                             msg("empty consumer key.",-1);
                         }
-                        if ($doit && !auth_isadmin() && !(1 && auth_ismanager())) {
+                        if ($doit && !auth_isadmin() && !($this->getConf('manager_admin') && auth_ismanager())) {
                             $acllimit = $doku_server->get_consumer_acl($consumer_key);
                             if (!is_array($acllimit) 
                                 || $acllimit['owner'] != $_SERVER['REMOTE_USER'] 
@@ -213,7 +213,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $doit=false;
                             msg("empty token key.",-1);
                         }
-                        if ($doit && !auth_isadmin() && !(1 && auth_ismanager())) {
+                        if ($doit && !auth_isadmin() && !($this->getConf('manager_admin') && auth_ismanager())) {
                             $owner = $doku_server->get_token_user($token_key);
                             if (empty($owner)) {
                                 $doit=false; // XXX - delete those after they expire..
@@ -237,7 +237,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                     case 'tlist':
                         $handled=true; 
                         $event->data="oauthlist";
-                        if (auth_isadmin() || (1 && auth_ismanager())) {
+                        if (auth_isadmin() || ($this->getConf('manager_admin') && auth_ismanager())) {
                             $userfilter=$_REQUEST['userfilter']; # TODO - admin-form
                             msg("admin mode - showing tokens of all users",0);
                         } else {
@@ -390,7 +390,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $this->_outargs=array('consumer_key' => $consumer->key, 'callback_url' => $consumer->callback_url);
                             $this->_outargs['acllimit'] = $doku_server->get_consumer_acl($consumer->key);
                             // TODO if not is_admin() .. remove /secret/ information from acllimit ?!
-                            if (auth_isadmin() || (1 && auth_ismanager())) { // XXX
+                            if (auth_isadmin() || ($this->getConf('manager_admin') && auth_ismanager())) { // XXX
                                 $this->_outargs['consumer_secret'] = $consumer->secret; 
                             } else {
                                 $this->_outargs['consumer_secret'] = '&lt;<em>hidden</em>&gt;'; 

@@ -229,6 +229,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
                 }
             print '<td>';
             foreach ($t['action'] as $action => $title) {
+              // TODO: make this a <form> and POST requests !!
               print '<a href="'.BASE_URL.'?do[oauth]='.$action.rawurlencode($t['key']).'">'.$title.'</a>&nbsp;'.NL;
             }
             print '</td>'.NL;
