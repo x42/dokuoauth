@@ -181,7 +181,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         $form->addElement('<li>Callback URL: '.$opt['callback_url'].'</li>');
         if (is_array($opt['acllimit']))
             foreach ($opt['acllimit'] as $k => $v) {
-                if (is_array($v)) $v=print_r($v,true); // XXX
+                if (is_array($v)) $v=print_r($v,true); // XXX - quick hack
                 $form->addElement('<li>ACL -'.$k.': '.$v.'</li>');
             }
         $form->addElement('</ul></div>');
@@ -191,7 +191,8 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         } else {
             $form->addHidden('consumer_key', $opt['consumer_key']); 
             $form->addElement(form_makeButton('submit', 'oauth', 'clist')); // XXX
-            $form->addElement(form_makeButton('submit', 'oauth', 'delconsumer')); // XXX
+            $form->addElement(form_makeButton('submit', 'oauth', 'delconsumer')); // XXX (only if permitted), 
+            # TODO: add check-box to remove consumer-trust ?!
         }
         $form->endFieldset();
 
@@ -208,8 +209,9 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         $this->oauthToolbar();
         print '<h1>OAuth Admin </h1>'.NL;
         print '<div class="leftalign"><table cellspacing="4">'.NL;
+        # TODO: filter on username or token. form
         print '<tr>'.NL;
-        print '<th>User</th>'.NL; # XXX
+        print '<th>User</th>'.NL; # XXX is '-' for all consumer-tokens !
         print '<th>Token-Type</th><th>Key</th><th>Secret</th>'.NL;
         if (is_array($tokens[0]['acllimit']))
             foreach ($tokens[0]['acllimit'] as $k => $v) 
@@ -224,7 +226,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
             print '<td>'.$t['secret'].'</td>'.NL;
             if (is_array($tokens[0]['acllimit']))
                 foreach ($t['acllimit'] as $k => $v) {
-                    if (is_array($v)) $v=print_r($v,true); // XXX
+                    if (is_array($v)) $v=print_r($v,true); // XXX - quick hack
                     print '<td>'.$v.'</td>';
                 }
             print '<td>';

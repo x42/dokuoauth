@@ -233,6 +233,7 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         $key=dba_firstkey($this->dbh);
         $tokens=array();
         $usertokens=array();
+        # TODO:  turn loops around list all 'request_' and 'access_'; then get userT_ or userX_
         while ($key != false) {
             if (!strncmp($key,"userT_",6))
                 $tokens[] = $key;

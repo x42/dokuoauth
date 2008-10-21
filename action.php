@@ -69,7 +69,10 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             }
 
             if (empty($user)) $this->_debug('oAuth: empty user name.');
-            if (empty($user)) return;
+            if (empty($user)) {
+                $this->_log("signature ok, mapped username is empty.");
+                return;
+            }
 
             // -> set username for this session
             $_SERVER['REMOTE_USER'] = $user;
@@ -79,7 +82,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             if (!is_array($USERINFO)) {
                 $_SERVER['REMOTE_USER'] = ""; // after _log() ?
                 $this->_debug('oAuth: could not find user: '.$user);
-                $this->_log("user '$user' not found.");
+                $this->_log("signature ok, user '$user' not found.");
             } 
             else { 
                 $this->_debug('oAuth: set-user: '.$user);
@@ -160,19 +163,21 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $doit=false;
                             msg("empty consumer key.",-1);
                         }
-                        if ($doit && !auth_isadmin() && !($this->getConf('manager_admin') && auth_ismanager())) {
+                        if ($doit && !$this->oauth_isadmin()) {
                             $acllimit = $doku_server->get_consumer_acl($consumer_key);
                             if (!is_array($acllimit) 
                                 || $acllimit['owner'] != $_SERVER['REMOTE_USER'] 
                                 || empty($_SERVER['REMOTE_USER'])) {
-                                // TODO PERMISSION DENIED
-                                #$handled=true; 
-                                #$event->data="oautherror"; // TODO go back to clist?
-                                #$this->_outargs['errormessage'] = 'permission denied.';
-                                #break;
-                                msg("permission denied to delete consumer.",-1);
                                 $doit=false;
                             }
+                            // allow anyone to delete consumers added by '' (anonymous) ?!
+                            if (is_array($acllimit) 
+                                && empty($acllimit['owner']) 
+                                && $this->getConf('consumerdel') == 'anyone') {
+                                $doit=true;
+                            }
+                            if (!$doit)
+                                msg("permission denied to delete consumer.",-1);
                         }
                         if ($doit && !$doku_server->get_consumer_by_key($consumer_key)) {
                                 msg("unknown consumer key. maybe it has been deleted already.",-1);
@@ -189,11 +194,10 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $event->data="oauthlist";
                         $this->_outargs=array();
                         $consumers=$doku_server->list_consumers();
-                        // map to $this->_outargs; include links to cinfo, strip secrets unless auth_ismanager()
                         foreach ($consumers as $c) {
                             $acllimit = $doku_server->get_consumer_acl($c->key);
                             $secret = $c->secret;
-                            if (!auth_isadmin() && !($this->getConf('manager_admin') && auth_ismanager())) { 
+                            if (!$this->oauth_isadmin()) {
                                 if (!is_array($acllimit) 
                                     || $acllimit['owner'] != $_SERVER['REMOTE_USER'] 
                                     || empty($_SERVER['REMOTE_USER'])) {
@@ -227,10 +231,10 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $doit=false;
                             msg("empty token key.",-1);
                         }
-                        if ($doit && !auth_isadmin() && !($this->getConf('manager_admin') && auth_ismanager())) {
+                        if ($doit && !$this->oauth_isadmin()) {
                             $owner = $doku_server->get_token_user($token_key);
                             if (empty($owner)) {
-                                $doit=false; // XXX - delete those after they expire..
+                                $doit=false; // TODO - delete those after they expire..
                                 $this->_debug("found yet unmapped request token.");
                             } else
                             if ($owner != $_SERVER['REMOTE_USER'] || empty($_SERVER['REMOTE_USER'])) {
@@ -251,7 +255,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                     case 'tlist':
                         $handled=true; 
                         $event->data="oauthlist";
-                        if (auth_isadmin() || ($this->getConf('manager_admin') && auth_ismanager())) {
+                        if ($this->oauth_isadmin()) {
                             $userfilter=$_REQUEST['userfilter']; # TODO - admin-form
                             msg("admin mode - showing tokens of all users",0);
                         } else {
@@ -265,14 +269,23 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         }
                         $this->_outargs=array();
                         foreach($doku_server->list_usertokens($userfilter) as $token) {
-                        // TODO lookup userX mappings?
-                            $ti=$doku_server->get_token_by_key($token['consumer_key'], $token['token_key']); 
+                            $ti=$doku_server->get_token_by_key(NULL, $token['token_key']); 
+                            $rqmap=NULL;
+                            # TODO ; see also list_tokens() in OAuth_DokuServer.php
+                            #if ($this->oauth_isadmin()) {
+                            #    //lookup userX mappings. (consumer<>token map for [unexchanged] request-tokens)
+                            #    $rqmap=array('Consumer-Key' => $doku_server->get_consumer_by_requesttoken($token));
+                            #}
+                            $secret=$ti['obj']->secret;
+                            if ($ti['type']=='access' && !$this->getConf('disclose_access_token_secret'))
+                                $secret = '&lt;<em>hidden</em>&gt;'; 
                             $this->_outargs[]=array(
                                 'user' => $token['user'], 
                                 'type' => $ti['type'],
                                 'action' => array ( 'deltoken&token_key=' => 'Revoke'),
                                 'key' => $ti['obj']->key,
-                                'secret' => $ti['obj']->secret # XXX strip secrets unless configued.
+                                'secret' => $secret,
+                            #   'acllimit' => $rqmap  // XXX - temp. re-using this array for display
                             );
                         }
                         break;
@@ -307,8 +320,15 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $this->_outargs['errormessage'] = 'addconsumer: empty consumer key.';
                             break; 
                         }
+                        if (  ($this->getConf('consumeradd') == 'admin' && !$this->oauth_isadmin())
+                            ||($this->getConf('consumeradd') == 'user' && empty($_SERVER['REMOTE_USER']))
+                           ) {
+                            $event->data="oautherror"; 
+                            $this->_debug('addconsumer: permission denied.');
+                            $this->_outargs['errormessage'] = 'permission denied to create consumer.';
+                            break;
+                        }
                         $finished=true;
-
                         if ($doku_server->get_consumer_by_key($consumer_key)) {
                             ; // TODO: error or ignore ?
                             if ($_REQUEST['feedback']) {
@@ -327,7 +347,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
                         if ($_REQUEST['feedback']) {
                             $finished=false;
-                            $event->data="oautherror"; // TODO go back to add-form.
+                            $event->data="oautherror"; // TODO: _OK_ - go back to add-form or list-consumers 
                             $this->_outargs['errormessage'] = 'scratch that error. Consumer '.$consumer_key.' was added suceccfully.';
                         }
                         break;
@@ -336,6 +356,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $this->_debug('ACT: accesstoken');
                         $finished=true;
                         $req = OAuthRequest::from_request();
+                        $this->_log("oauth requesttoken.");
 
                         # DokuOAuthDataStore for access tokens:
                         #  - tests if given request-token has been (authorized by|mapped to) a user 
@@ -354,6 +375,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         $this->_debug('ACT: requesttoken');
                         $finished=true;
                         $req = OAuthRequest::from_request();
+                        $this->_log("oauth requesttoken.");
                         $token = $doku_server->fetch_request_token($req);
 
                         $op=$req->get_parameters();
@@ -404,7 +426,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                                 $secpass=$doku_server->save_session($ses);
                                 $consumer_key=$ses['consumer_key'];
                             } else {
-                                // ignore (reload) ? XXX
+                                // silently ignore reload? XXX
                                 $this->_debug('consumer info: empty session');
                                 $consumer_key='';
                             }
@@ -422,9 +444,9 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $event->data="oauthcinfo";
                             $this->_outargs=array('consumer_key' => $consumer->key, 'callback_url' => $consumer->callback_url);
                             $this->_outargs['acllimit'] = $doku_server->get_consumer_acl($consumer->key);
-                            if (auth_isadmin() || ($this->getConf('manager_admin') && auth_ismanager())) { 
+                            if ($this->oauth_isadmin()) { 
                                 $this->_outargs['consumer_secret'] = $consumer->secret; 
-                                $this->_outargs['acllimit']['settings'] = $doku_server->get_consumer_settings($consumer->key); // XXX 
+                                $this->_outargs['acllimit']['settings'] = $doku_server->get_consumer_settings($consumer->key); // TODO - make special settings array.
 
                             } else {
                                 $this->_outargs['consumer_secret'] = '&lt;<em>hidden</em>&gt;'; 
@@ -508,9 +530,9 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $secpass=$doku_server->save_session(array('consumer_key' =>$consumer_key, 'token_key' => $token_key, 'oauth_callback' => $callback_url));
                             // LOGIN PAGE WORKAROUND XXX
                             global $ID; $ID="OAUTHPLUGINNONCE:".rawurlencode($secpass);
-                            $finished=false; $handled=true; $event->data="login";
+                            $finished=false; $event->data="login";
+                            $handled=false; /// don't $event->preventDefault(); 'login' is the default ;)
                             $this->_debug('dropping to login..');
-                            return; /// don't $event->preventDefault(); 'login' is the default ;)
                             // END LOGIN PAGE WORKAROUND XXX
                             break; 
                         }
@@ -580,10 +602,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         }
         if ($handled) {
             $this->_debug('handled action');
-            #$event->stopPropagation();
             $event->preventDefault();
-            #$event->result = true;
-            #return true;
         }
     }
 
@@ -696,7 +715,13 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         if (!is_array($cs['trusted']) || !in_array($user, $cs['trusted'])) return false;
 
         return true; 
-    }
+    }/*}}}*/
+
+    private function oauth_isadmin() {/*{{{*/
+        if (auth_isadmin() || ($this->getConf('manager_admin') && auth_ismanager())) 
+            return true;
+        return false;
+    }/*}}}*/
 
     private function redirect($uri, $params) {/*{{{*/
         if (!empty($params)) { 
@@ -726,7 +751,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
     /*{{{*/
     private function _log ($m = null){
-        $OAlog= false; //XXX
+        $OAdebug= $this->getConf('log_all_requests'); 
         $OAlogdb= '/tmp/oAuth.log';
         $dbh = dba_popen($OAlogfile, 'c', 'inifile');
         if (! isset($OAlog) || $OAlog === false) return;
@@ -760,7 +785,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
     /*{{{*/
     private function _debug ($m = null){
-        $OAdebug= true; //XXX
+        $OAdebug= $this->getConf('trace_plugin'); 
         $OAlogfile= '/tmp/oAuth.debug';
         if (! isset($OAdebug) || $OAdebug === false) return;
 
