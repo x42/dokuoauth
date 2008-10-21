@@ -5,7 +5,7 @@
  * @author    Robin Gareus <robin@gareus.org
  */
 $lang['enable']            = 'en/disable authentication of OAuth-signed requests.';
-$lang['manager_admin']     = 'allow managers to administrate ALL oauth-tokens';
+$lang['manager_admin']     = 'allow wiki-managers to administrate oauth-tokens';
 #$lang['custom_base_url']   = 'set custom end-point base-url (leave blank for default/autodetection)';
 $lang['log_all_requests']  = 'OAuth Request Logging (violates the privacy of users and is not recommended)';
 $lang['trace_plugin']      = 'Debug Log (trace oAuth plugin)';

@@ -7,8 +7,10 @@ see also /TODO/ and /XXX/ in php source comments.
  * auto-delete expired request-tokens
  * plugin configuration settings
  * email notification
- * oauth-discovery server (later client)
- * optimize code, and flow.
+ * RSA-SHA1 keys & cert
+ * oauth-discovery server & client
+ * add consumer 
+ * optimize code!
  * re-login page.
  * require HTTPS for secret-exchange ?!
  * max requests per consumer and per IP 
