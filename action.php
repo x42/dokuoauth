@@ -153,48 +153,102 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         break;
 
                     case 'delconsumer':
-                        die("not yet implemented");
-                        # TODO: check permissions.
+                        $doit=true;
                         $consumer_key=$_REQUEST['consumer_key'];
                         $this->_debug("remove Consumer: $consumer_key");
-                        $doku_server->delete_consumer($consumer_key);
-                        msg("removed Consumer: $consumer_key");
-                      # break;
+                        if (empty($consumer_key)) {
+                            $doit=false;
+                            msg("empty consumer key.",-1);
+                        }
+                        if ($doit && !auth_isadmin() && !(1 && auth_ismanager())) {
+                            $acllimit = $doku_server->get_consumer_acl($consumer_key);
+                            if (!is_array($acllimit) 
+                                || $acllimit['owner'] != $_SERVER['REMOTE_USER'] 
+                                || empty($_SERVER['REMOTE_USER'])) {
+                                // TODO PERMISSION DENIED
+                                #$handled=true; 
+                                #$event->data="oautherror"; // TODO go back to clist?
+                                #$this->_outargs['errormessage'] = 'permission denied.';
+                                #break;
+                                msg("permission denied to delete consumer.",-1);
+                                $doit=false;
+                            }
+                        }
+                        if ($doit && !$doku_server->get_consumer_by_key($consumer_key)) {
+                                msg("unknown consumer key. maybe it has been deleted already.",-1);
+                                $doit=false;
+                        }
+                        if ($doit) {
+                            $doku_server->delete_consumer($consumer_key);
+                            msg("removed Consumer: $consumer_key");
+                        }
+                        # continue to list
 
                     case 'clist':
                         $handled=true; 
                         $event->data="oauthlist";
                         $this->_outargs=array();
                         $consumers=$doku_server->list_consumers();
-                        // map to $this->_outargs; include links to cinfo, strip secrets unless is_manager()
+                        // map to $this->_outargs; include links to cinfo, strip secrets unless auth_ismanager()
                         foreach ($consumers as $c) {
-                            // TODO get settings / ACL limits ?
                             $acllimit = $doku_server->get_consumer_acl($c->key);
+                            unset($acllimit);
+                            // TODO if not is_admin() .. remove /secret/ information
                             $this->_outargs[]=array(
                                 'key' => $c->key,
                                 'user' => '-', # SUID ?
                                 'type' => 'consumer',
                                 'secret' => $c->secret,
-                                'action' => 'delconsumer&consumer_key=', # XXX array?, text
+                                'acllimit' => $acllimit,
+                                'action' => array( 'delconsumer&consumer_key=' => 'Delete', 'cinfo&consumer_key=' => 'Inspect')
                             );
                         }
                         break;
 
                     case 'deltoken':
-                        die("not yet implemented");
-                        # TODO: check access rights.
-                        # see if token belogs to user.
-                        # or to _any_ user.
-                        $token=$_REQUEST['token_key'];
-                        $this->_debug("remove Token: $token");
-                        $doku_server->unmap_user($token);
-                        msg("removed token: $token");
+                        $doit=true;
+                        $token_key=$_REQUEST['token_key'];
+                        $this->_debug("remove Token: $token_key");
+                        if (empty($token_key)) {
+                            $doit=false;
+                            msg("empty token key.",-1);
+                        }
+                        if ($doit && !auth_isadmin() && !(1 && auth_ismanager())) {
+                            $owner = $doku_server->get_token_user($token_key);
+                            if (empty($owner)) {
+                                $doit=false; // XXX - delete those after they expire..
+                                $this->_debug("found yet unmapped request token.");
+                            } else
+                            if ($owner != $_SERVER['REMOTE_USER'] || empty($_SERVER['REMOTE_USER'])) {
+                                msg("permission denied to delete consumer.",-1);
+                                $doit=false;
+                            }
+                        }
+                        if ($doit && !$doku_server->get_token_by_key(NULL, $token_key)) {
+                            msg("token does not exist.",-1);
+                            $doit=false;
+                        }
+                        if ($doit && get_token_by_key(NULL, $token_key)) {
+                            $doku_server->unmap_user($token_key);
+                            msg("removed token: $token_key");
+                        }
                     #   break;
 
                     case 'tlist':
                         $handled=true; 
                         $event->data="oauthlist";
-                        $userfilter=""; //$_SERVER['REMOTE_USER']; # XXX
+                        if (auth_isadmin() || (1 && auth_ismanager())) {
+                            $userfilter=$_REQUEST['userfilter']; # TODO - admin-form
+                            msg("admin mode - showing tokens of all users",0);
+                        } else {
+                            $userfilter=trim($_SERVER['REMOTE_USER']);
+                            if (empty($userfilter)) {
+                                // permission denied.
+                                $event->data="oautherror"; // TODO go back to list-form?
+                                $this->_outargs['errormessage'] = 'you need to be logged in to view your tokens.';
+                                break;
+                            }
+                        }
                         $this->_outargs=array();
                         foreach($doku_server->list_usertokens($userfilter) as $token) {
                         // TODO lookup userX mappings?
@@ -202,9 +256,9 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $this->_outargs[]=array(
                                 'user' => $token['user'], 
                                 'type' => $ti['type'],
-                                'action' => 'deltoken&token_key=', # XXX array?
+                                'action' => array ( 'deltoken&token_key=' => 'Revoke'),
                                 'key' => $ti['obj']->key,
-                                'secret' => $ti['obj']->secret # XXX
+                                'secret' => $ti['obj']->secret # XXX strip secrets unless configued.
                             );
                         }
                         break;
@@ -303,7 +357,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         print $token;
                         break;
 
-                    case 'info':
+                    case 'info': // general information on oAuth
                         $handled=true; 
                         $event->data="oauthinfo";
                         break;
@@ -333,9 +387,10 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
 
                         if ($consumer=$doku_server->get_consumer_by_key($consumer_key)) {
                             $event->data="oauthcinfo";
-                            // TODO get settings / ACL limits.
                             $this->_outargs=array('consumer_key' => $consumer->key, 'callback_url' => $consumer->callback_url);
-                            if (auth_ismanager()) { // XXX
+                            $this->_outargs['acllimit'] = $doku_server->get_consumer_acl($consumer->key);
+                            // TODO if not is_admin() .. remove /secret/ information from acllimit ?!
+                            if (auth_isadmin() || (1 && auth_ismanager())) { // XXX
                                 $this->_outargs['consumer_secret'] = $consumer->secret; 
                             } else {
                                 $this->_outargs['consumer_secret'] = '&lt;<em>hidden</em>&gt;'; 
@@ -519,6 +574,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                 $handled=true;
                 break;
             case 'oauthcancel':
+                $helper->oauthToolbar();
                 print('<p>Oauth Transaction Cancelled. I don\'t know what to do next. Have nice day.</p><p> truly yours,<br/> OAuth plugin</p>');
                 $handled=true;
                 break;

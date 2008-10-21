@@ -179,13 +179,19 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         $form->addElement('<li>Consumer-Key: '.$opt['consumer_key'].'</li>');
         $form->addElement('<li>Consumer-secret: '.$opt['consumer_secret'].'</li>');
         $form->addElement('<li>Callback URL: '.$opt['callback_url'].'</li>');
+        if (is_array($opt['acllimit']))
+            foreach ($opt['acllimit'] as $k => $v) {
+                if (is_array($v)) $v=print_r($v,true); // XXX
+                $form->addElement('<li>ACL -'.$k.': '.$v.'</li>');
+            }
         $form->addElement('</ul></div>');
         if (!empty($opt['secpass'])) {
             $form->addElement(form_makeButton('submit', 'oauth', 'resume', array('title' => 'authorize')));
             $form->addElement(form_makeButton('submit', 'oauth', 'cancel'));
         } else {
             $form->addHidden('consumer_key', $opt['consumer_key']); 
-            $form->addElement(form_makeButton('submit', 'oauth', 'cinfo')); // XXX
+            $form->addElement(form_makeButton('submit', 'oauth', 'clist')); // XXX
+            $form->addElement(form_makeButton('submit', 'oauth', 'delconsumer')); // XXX
         }
         $form->endFieldset();
 
@@ -203,16 +209,29 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         print '<h1>OAuth Admin </h1>'.NL;
         print '<div class="leftalign"><table cellspacing="4">'.NL;
         print '<tr>'.NL;
-            print '<th>User</th>'.NL; # XXX
-            print '<th>Token-Type</th><th>Key</th><th>Secret</th>'.NL;
-            print '</tr>'.NL;
+        print '<th>User</th>'.NL; # XXX
+        print '<th>Token-Type</th><th>Key</th><th>Secret</th>'.NL;
+        if (is_array($tokens[0]['acllimit']))
+            foreach ($tokens[0]['acllimit'] as $k => $v) 
+                print '<th>ACL-'.$k.'</th>';
+        print '<th>.</th>';
+        print '</tr>'.NL;
         foreach ($tokens as $t) {
             print '<tr>'.NL;
             print '<td>'.$t['user'].'</td>'.NL; # XXX
             print '<td>'.$t['type'].'</td>'.NL;
             print '<td>'.$t['key'].'</td>'.NL;
             print '<td>'.$t['secret'].'</td>'.NL;
-            print '<td><a href="'.BASE_URL.'?do[oauth]='.$t['action'].rawurlencode($t['key']).'">Revoke</a></td>'.NL;
+            if (is_array($tokens[0]['acllimit']))
+                foreach ($t['acllimit'] as $k => $v) {
+                    if (is_array($v)) $v=print_r($v,true); // XXX
+                    print '<td>'.$v.'</td>';
+                }
+            print '<td>';
+            foreach ($t['action'] as $action => $title) {
+              print '<a href="'.BASE_URL.'?do[oauth]='.$action.rawurlencode($t['key']).'">'.$title.'</a>&nbsp;'.NL;
+            }
+            print '</td>'.NL;
             print '</tr>'.NL;
         }
         print '</table></div>'.NL;
@@ -251,7 +270,7 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
 
     public function oauthToolbar() {
         print '<div class="toolbar">'.NL;
-        print 'OAuth:&nbsp;';
+        print '<b>OAuth Plugin</b>:&nbsp;';
         print '<a href="'.DOKU_BASE.'?do=oauth" class="wikilink1">Info</a>'.NL;
         print '&nbsp;|&nbsp;';
         print '<a href="'.DOKU_BASE.'?do[oauth]=clist" class="wikilink1">Keys for this site</a>'.NL;
@@ -259,6 +278,8 @@ class helper_plugin_oauth extends DokuWiki_Plugin {
         print '<a href="'.DOKU_BASE.'?do[oauth]=addconsumer" class="wikilink1">Request/create Consumer-Key and Secret</a>'.NL;
         print '&nbsp;|&nbsp;';
         print '<a href="'.DOKU_BASE.'?do[oauth]=tlist" class="wikilink1">Applications using your account (list request/access tokens)</a>'.NL;
+        print '<hr/>'.NL;
+        print '<br/>'.NL;
         print '</div>'.NL;
     }
 

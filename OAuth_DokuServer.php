@@ -43,7 +43,7 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
         return ($this->data_store->all_consumers());
     }/*}}}*/
 
-    public function list_usertokens($username) {/*{{{*/
+    public function list_usertokens($username = '') {/*{{{*/
         return ($this->data_store->list_tokens($username));
     }/*}}}*/
 
@@ -71,6 +71,12 @@ class DokuOAuthServer extends OAuthServer {/*{{{*/
 
     public function get_consumer_by_requesttoken($token) {/*{{{*/
         return ($this->data_store->lookup_consumermap($token));
+    }/*}}}*/
+
+    public function get_token_user($token_key) {/*{{{*/
+        // don't use for authentication. - admin tasks only
+        $user=$this->data_store->lookup_user_unsafe($token_key);
+        return ($user);
     }/*}}}*/
 
     public function get_dokuwiki_user($consumer_key, $token_key) {/*{{{*/
@@ -167,6 +173,14 @@ class DokuOAuthDataStore extends OAuthDataStore {/*{{{*/
         if ($rv === FALSE) return NULL;
         $data = unserialize($rv);
         if ($data['consumer'] != $consumer_key) return NULL;
+        return $data['user'];
+    }/*}}}*/
+
+    function lookup_user_unsafe($token) {/*{{{*/
+        $rv = dba_fetch("userT_$token", $this->dbh);
+        if ($rv === FALSE) return NULL;
+        $data = unserialize($rv);
+        if ($data['token'] != $token) return NULL;
         return $data['user'];
     }/*}}}*/
 
