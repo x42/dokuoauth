@@ -28,7 +28,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
     /**
      * register the eventhandlers
      */
-    function register(&$contr){
+    function register(&$contr){/*{{{*/
         $contr->register_hook('ACTION_ACT_PREPROCESS',
                               'BEFORE',
                               $this,
@@ -43,12 +43,16 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                               'BEFORE',
                               $this,
                               'handle_act_output');
-    }
+    }/*}}}*/
 
     /**
-     *
+     * handles all oauth-signed requests, but for those to the
+     * do[oauth]=XXX API.
+     * 
+     * validates signature and sets $_SERVER['REMOTE_USER'] 
+     * just like auth_login(). 
      */
-    function handle_act_authhook(&$event, $param){
+    function handle_act_authhook(&$event, $param){/*{{{*/
         if (is_array($_REQUEST['do']) && !empty($_REQUEST['do']['oauth'])) return; // skip requests to oauth-API
 
         if (!empty($_REQUEST['oauth_signature'])) {
@@ -66,6 +70,12 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                 $this->_debug("oauth error:\n".$e->getMessage()."\n".print_r($req, true));
                 $this->_log("oauth error:\n".$e->getMessage()."\n".print_r($req, true));
                 die();
+            }
+            if (!$this->getConf('enable')) {
+                $this->_debug('oAuth: good signature but plugin is not enabled.');
+                $this->_log("signature ok, but plugin disabled.");
+                msg('good signature - but OAuth authorization not enabled in plugin configuration');
+                return;
             }
 
             if (empty($user)) $this->_debug('oAuth: empty user name.');
@@ -89,28 +99,14 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                 $this->_log("granted access.");
             }
         }
-    }
+    }/*}}}*/
 
 
-# FLOW;
-# - [admin,user,auto] add consumer 
-#     [admin] may set suid tokens along with user
-#     [admin] may set trust-level of consumer-keys (restrict to users, group)
-#     [user] may whitelist consumer for his account and set an ACL limit for the consumer and/or [req|access] token!
-#     [anon-consumers] may add themselves with a callback uri 
-# - get request-token
-#    [auto] if consumer is suid (no-browser - return token or redirect to consumer)
-#    [auto] if user is logged-on and has whitelisted the consumer -> redirect to consumer
-#    [user] if user is logged-on -> as for confirmation  -> redirect to consumer
-#    [user] log-in (remember consumer) -> try-again to check/ask for confirmation -> redirect to consumer
-#
-# - [auto] get access-token 
-#    check if request token is valid for this consumer and has a dokuwiki user mapped to it..  
-#
     /**
-     *
+     * handles do=oauth and do[oauth]='XXX' requests to 
+     * oAuth API and oAuth Admin.
      */
-    function handle_act_preprocess(&$event, $param){
+    function handle_act_preprocess(&$event, $param){/*{{{*/
         $handled=false;  // continue with dokuwiki..
         $finished=false; // request finished - exit after this function
         $user_notified=false;  // TODO
@@ -185,7 +181,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                         }
                         if ($doit) {
                             $doku_server->delete_consumer($consumer_key);
-                            msg("removed Consumer: $consumer_key");
+                            msg("removed Consumer: $consumer_key",1);
                         }
                         # continue to list
 
@@ -246,9 +242,9 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             msg("token does not exist.",-1);
                             $doit=false;
                         }
-                        if ($doit && get_token_by_key(NULL, $token_key)) {
+                        if ($doit) {
                             $doku_server->unmap_user($token_key);
-                            msg("removed token: $token_key");
+                            msg("removed token: $token_key",1);
                         }
                     #   break;
 
@@ -414,7 +410,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
                             $cs=$doku_server->get_consumer_settings($consumer_key); 
                             $cs['trusted']=array_unique(array_diff($cs['trusted'],array($_SERVER['REMOTE_USER'])));
                             $doku_server->set_consumer_settings($consumer_key,$cs); 
-                            msg("removed trust in consumer: $consumer_key");
+                            msg("removed trust in consumer: $consumer_key",1);
                         }
 
                     case 'cinfo': // show consumer info (optionally back to authorize-token)
@@ -604,9 +600,12 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             $this->_debug('handled action');
             $event->preventDefault();
         }
-    }
+    }/*}}}*/
 
-    function handle_act_output(&$event){
+    /**
+     * print output of do=oauth, do[auth]=XX  actions
+     */
+    function handle_act_output(&$event){/*{{{*/
         $handled=false;
         $this->_debug('output event: '.print_r($event, true));
         if (!in_array(trim($event->data), array(
@@ -670,7 +669,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             $event->preventDefault();
             return true;
         }
-    }
+    }/*}}}*/
 
     private function check_consumer_acl($doku_server, $consumer_key) {/*{{{*/
         $acllimit = $doku_server->get_consumer_acl($consumer_key);
@@ -697,7 +696,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         // TODO: check group(s), not is_admin, etc.
         if (is_array($acllimit['users']) && !in_array($user, $acllimit['users'])) { 
             $this->_debug("denied user '$user' for this consumer.");
-            msg("Consumer is not allowed access to this user.");
+            msg("Consumer is not allowed access to this user.",-1);
             #auth_logoff();
             $user=NULL;
         }
@@ -749,8 +748,7 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         exit(0);
     } /*}}}*/
 
-    /*{{{*/
-    private function _log ($m = null){
+    private function _log ($m = null){ /*{{{*/
         $OAdebug= $this->getConf('log_all_requests'); 
         $OAlogdb= '/tmp/oAuth.log';
         $dbh = dba_popen($OAlogfile, 'c', 'inifile');
@@ -779,12 +777,9 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
             return;
         }
         dba_close($this->dbh);
-    } 
-    /*}}}*/
+    } /*}}}*/
 
-
-    /*{{{*/
-    private function _debug ($m = null){
+    private function _debug ($m = null){ /*{{{*/
         $OAdebug= $this->getConf('trace_plugin'); 
         $OAlogfile= '/tmp/oAuth.debug';
         if (! isset($OAdebug) || $OAdebug === false) return;
@@ -796,8 +791,8 @@ class action_plugin_oauth extends DokuWiki_Action_Plugin {
         }
         $vhost=DOKU_URL;
         error_log($vhost.' '.date("c ").$m."\n", 3, $OAlogfile);
-    } 
-    /*}}}*/
+    } /*}}}*/
 
 }
-//Setup VIM: ex: et sw=4 ts=4 enc=utf-8 :
+
+/* vim: set ts=4 sw=4 et foldmethod=marker enc=utf-8 : */
